@@ -20,7 +20,8 @@ services:
       - /var/lib/docker:/var/lib/docker:ro
       - /cgroup:/cgroup:ro
     command:
-      - '--disable_metrics=disk'
+      - '--disable_metrics=disk,referenced_memory'
+      - '--docker_only=true'
     restart: always
     expose:
       - 8080
