@@ -111,6 +111,8 @@ services:
       - ./config.alloy:/etc/alloy/config.alloy:ro
       - /var/run/docker.sock:/var/run/docker.sock:ro
       - /var/log:/var/log:ro
+      - /proc:/host/proc:ro
+      - /sys:/host/sys:ro
     environment:
       - AGENT_NAME=${AGENT_NAME:-master-node}
     command:

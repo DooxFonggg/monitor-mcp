@@ -2,6 +2,8 @@
 
 // 1. Collect Host Metrics (equivalent to Node Exporter)
 prometheus.exporter.unix "local" {
+  procfs_path = "/host/proc"
+  sysfs_path  = "/host/sys"
 }
 
 prometheus.relabel "local_host" {

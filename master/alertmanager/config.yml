@@ -45,7 +45,7 @@ receivers:
   telegram_configs:
   - api_url: https://api.telegram.org
     bot_token: "123456:ABC-DEF1234ghIkl-zyx57W2v1u123ew11" # Placeholder token
-    chat_id: 0 # Phải là số nguyên (int64) để tránh lỗi parse config
+    chat_id: 123456789 # Phải là số nguyên (int64) khác 0 để tránh lỗi parse config
     disable_notifications: false
     http_config:
       follow_redirects: true
