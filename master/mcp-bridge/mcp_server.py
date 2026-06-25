@@ -57,7 +57,11 @@ os.environ["FASTMCP_SERVER_HOST"] = os.environ.get("FASTMCP_SERVER_HOST", "0.0.0
 os.environ["FASTMCP_SERVER_PORT"] = os.environ.get("FASTMCP_SERVER_PORT", "8000")
 
 # Initialize MCP Server
-mcp = FastMCP("Monitoring Bridge")
+mcp = FastMCP(
+    "Monitoring Bridge",
+    host=os.environ.get("FASTMCP_HOST", "0.0.0.0"),
+    port=int(os.environ.get("FASTMCP_PORT", "8000"))
+)
 
 def parse_relative_time(t_str: Optional[str]) -> float:
     """Helper to convert relative duration string (e.g., '15m', '2h') to absolute epoch timestamp."""
@@ -355,7 +359,7 @@ if __name__ == "__main__":
     
     if mode == "sse" or "--sse" in sys.argv:
         logger.info("Starting MCP Server in SSE (HTTP) mode on port 8000")
-        mcp.run(transport="sse", host="0.0.0.0", port=8000)
+        mcp.run(transport="sse")
     else:
         logger.info("Starting MCP Server in Stdio mode")
         mcp.run("stdio")
