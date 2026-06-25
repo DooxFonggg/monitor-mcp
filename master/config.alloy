@@ -18,6 +18,11 @@ prometheus.relabel "local_host" {
     target_label = "instance"
     replacement  = env("AGENT_NAME")
   }
+
+  rule {
+    target_label = "host_ip"
+    replacement  = env("HOST_IP")
+  }
 }
 
 prometheus.scrape "local_host" {
@@ -38,6 +43,11 @@ prometheus.relabel "cadvisor" {
   rule {
     target_label = "instance"
     replacement  = env("AGENT_NAME")
+  }
+
+  rule {
+    target_label = "host_ip"
+    replacement  = env("HOST_IP")
   }
 }
 
@@ -72,6 +82,11 @@ discovery.relabel "docker_logs" {
     target_label = "instance"
     replacement  = env("AGENT_NAME")
   }
+
+  rule {
+    target_label = "host_ip"
+    replacement  = env("HOST_IP")
+  }
 }
 
 loki.source.docker "docker_logs" {
@@ -99,6 +114,11 @@ loki.relabel "syslogs" {
   rule {
     target_label = "instance"
     replacement  = env("AGENT_NAME")
+  }
+
+  rule {
+    target_label = "host_ip"
+    replacement  = env("HOST_IP")
   }
 }
 

@@ -58,6 +58,9 @@ receivers:
       {{- range .Alerts.Firing }}
       🚨 <b>Cảnh báo:</b> <code>{{ .Labels.alertname }}</code>
       🟢 <b>Thiết bị:</b> <code>{{ .Labels.instance }}</code>
+      {{- if .Labels.host_ip }}
+      🌐 <b>IP Thiết bị:</b> <code>{{ .Labels.host_ip }}</code>
+      {{- end }}
       {{- if .Labels.name }}
       📦 <b>Container:</b> <code>{{ .Labels.name }}</code>
       {{- end }}
@@ -77,6 +80,9 @@ receivers:
       {{- range .Alerts.Resolved }}
       🟢 <b>Cảnh báo:</b> <code>{{ .Labels.alertname }}</code>
       🟢 <b>Thiết bị:</b> <code>{{ .Labels.instance }}</code>
+      {{- if .Labels.host_ip }}
+      🌐 <b>IP Thiết bị:</b> <code>{{ .Labels.host_ip }}</code>
+      {{- end }}
       {{- if .Labels.name }}
       📦 <b>Container:</b> <code>{{ .Labels.name }}</code>
       {{- end }}

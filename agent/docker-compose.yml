@@ -47,6 +47,7 @@ services:
       - PROMETHEUS_URL=${PROMETHEUS_URL:-http://localhost:9090/api/v1/write}
       - LOKI_URL=${LOKI_URL:-http://localhost:3100/loki/api/v1/push}
       - AGENT_NAME=${AGENT_NAME:-edge-01}
+      - HOST_IP=${HOST_IP:-127.0.0.1}
       - TZ=Asia/Ho_Chi_Minh
     command:
       - run
