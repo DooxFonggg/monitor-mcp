@@ -14,7 +14,7 @@ prometheus.relabel "local_host" {
 
   rule {
     target_label = "instance"
-    replacement  = sys.env("AGENT_NAME")
+    replacement  = env("AGENT_NAME")
   }
 }
 
@@ -34,7 +34,7 @@ prometheus.relabel "cadvisor" {
 
   rule {
     target_label = "instance"
-    replacement  = sys.env("AGENT_NAME")
+    replacement  = env("AGENT_NAME")
   }
 }
 
@@ -62,7 +62,7 @@ loki.relabel "docker_logs" {
 
   rule {
     target_label = "instance"
-    replacement  = sys.env("AGENT_NAME")
+    replacement  = env("AGENT_NAME")
   }
 }
 
@@ -89,7 +89,7 @@ loki.relabel "syslogs" {
 
   rule {
     target_label = "instance"
-    replacement  = sys.env("AGENT_NAME")
+    replacement  = env("AGENT_NAME")
   }
 }
 

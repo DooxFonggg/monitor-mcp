@@ -14,7 +14,7 @@ prometheus.relabel "agent_host" {
 
   rule {
     target_label = "instance"
-    replacement  = sys.env("AGENT_NAME")
+    replacement  = env("AGENT_NAME")
   }
 }
 
@@ -34,7 +34,7 @@ prometheus.relabel "cadvisor" {
 
   rule {
     target_label = "instance"
-    replacement  = sys.env("AGENT_NAME")
+    replacement  = env("AGENT_NAME")
   }
 }
 
@@ -62,7 +62,7 @@ loki.relabel "docker_logs" {
 
   rule {
     target_label = "instance"
-    replacement  = sys.env("AGENT_NAME")
+    replacement  = env("AGENT_NAME")
   }
 }
 
@@ -89,7 +89,7 @@ loki.relabel "syslogs" {
 
   rule {
     target_label = "instance"
-    replacement  = sys.env("AGENT_NAME")
+    replacement  = env("AGENT_NAME")
   }
 }
 
@@ -101,12 +101,12 @@ loki.source.file "syslogs" {
 // 5. Outputs targeting Master Node (endpoints retrieved via environment variables)
 prometheus.remote_write "prometheus_master" {
   endpoint {
-    url = sys.env("PROMETHEUS_URL")
+    url = env("PROMETHEUS_URL")
   }
 }
 
 loki.write "loki_master" {
   endpoint {
-    url = sys.env("LOKI_URL")
+    url = env("LOKI_URL")
   }
 }

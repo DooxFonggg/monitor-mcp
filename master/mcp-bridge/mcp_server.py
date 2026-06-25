@@ -5,7 +5,14 @@ import time
 import httpx
 import logging
 from typing import Optional
-from mcp import FastMCP
+
+try:
+    from mcp.server.fastmcp import FastMCP
+except ImportError:
+    try:
+        from fastmcp import FastMCP
+    except ImportError:
+        from mcp import FastMCP
 
 # Setup logging
 logging.basicConfig(level=logging.INFO)
