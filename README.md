@@ -191,7 +191,7 @@ Vì Claude Desktop chạy local và chủ yếu hỗ trợ giao thức `stdio` m
 ---
 
 ### 3. Antigravity IDE / Agent (`antigravity`)
-Antigravity IDE hỗ trợ kết nối trực tiếp đến các SSE MCP server thông qua file cấu hình `mcp_config.json`.
+Antigravity IDE hỗ trợ kết nối trực tiếp đến các MCP server qua giao thức Streamable HTTP thông qua file cấu hình `mcp_config.json`.
 
 1. Truy cập panel điều khiển **Agent Panel** trong Antigravity IDE.
 2. Click vào biểu tượng ba chấm **"..."** -> chọn **"Manage MCP Servers"** -> chọn **"View raw config"** (hoặc mở trực tiếp file `%USERPROFILE%\.gemini\antigravity-ide\mcp_config.json`).
@@ -200,7 +200,7 @@ Antigravity IDE hỗ trợ kết nối trực tiếp đến các SSE MCP server 
    {
      "mcpServers": {
        "monitoring-mcp": {
-         "url": "http://10.10.10.7:8000/sse"
+         "serverURL": "http://10.10.10.7:8000/mcp"
        }
      }
    }

@@ -75,7 +75,7 @@ Claude Desktop runs locally and natively supports standard I/O (`stdio`). You ca
 ---
 
 ### 3. Antigravity IDE / Agent (`antigravity`)
-Antigravity IDE supports connecting directly to remote SSE MCP servers using the `mcp_config.json` configuration file.
+Antigravity IDE supports connecting directly to remote Streamable HTTP MCP servers using the `mcp_config.json` configuration file.
 
 1. Open the **Agent Panel** inside Antigravity IDE.
 2. Click the **"..."** dropdown -> select **"Manage MCP Servers"** -> click **"View raw config"** (or open the file `%USERPROFILE%\.gemini\antigravity-ide\mcp_config.json` directly).
@@ -84,7 +84,7 @@ Antigravity IDE supports connecting directly to remote SSE MCP servers using the
    {
      "mcpServers": {
        "monitoring-mcp": {
-         "url": "http://10.10.10.7:8000/sse"
+         "serverURL": "http://10.10.10.7:8000/mcp"
        }
      }
    }
