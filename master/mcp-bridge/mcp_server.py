@@ -376,6 +376,10 @@ if __name__ == "__main__":
         from starlette.requests import Request
         from starlette.responses import Response
         
+        class NoOpResponse(Response):
+            async def __call__(self, scope, receive, send) -> None:
+                pass
+
         # Get standard SSE and Streamable HTTP Starlette apps
         sse_app = mcp.sse_app()
         http_app = mcp.streamable_http_app()
@@ -383,22 +387,28 @@ if __name__ == "__main__":
         # Combine routes from both apps to support all network transport methods
         routes = []
         routes.extend(sse_app.routes)
-        routes.extend(http_app.routes)
+        
+        # Wrap the streamable http app route handler to be a Starlette request-response endpoint
+        # to fix the official python-sdk bug where it registers an ASGI app as a Route endpoint
+        try:
+            http_asgi = http_app.routes[0].endpoint
+            async def http_endpoint(request: Request) -> Response:
+                await http_asgi(request.scope, request.receive, request._send)
+                return NoOpResponse()
+            routes.append(Route("/mcp", endpoint=http_endpoint))
+            logger.info("Added wrapped Route for /mcp")
+        except Exception as e:
+            logger.error(f"Failed to wrap /mcp route: {e}")
+            routes.extend(http_app.routes)
         
         # Add a compatibility route: POST /sse -> sse.handle_post_message
         # This resolves issues with clients that ignore the event endpoint and POST directly to /sse
         try:
             # Route index 1 in sse_app is typically the Mount for self.settings.message_path
             handle_post_message = sse_app.routes[1].app
-            
-            class NoOpResponse(Response):
-                async def __call__(self, scope, receive, send) -> None:
-                    pass
-
             async def post_message_endpoint(request: Request) -> Response:
                 await handle_post_message(request.scope, request.receive, request._send)
                 return NoOpResponse()
-
             routes.append(Route("/sse", endpoint=post_message_endpoint, methods=["POST"]))
             logger.info("Added compatibility route POST /sse -> handle_post_message")
         except Exception as e:
