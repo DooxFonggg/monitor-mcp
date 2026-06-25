@@ -373,6 +373,8 @@ if __name__ == "__main__":
         import uvicorn
         from starlette.applications import Starlette
         from starlette.routing import Route
+        from starlette.requests import Request
+        from starlette.responses import Response
         
         # Get standard SSE and Streamable HTTP Starlette apps
         sse_app = mcp.sse_app()
@@ -388,7 +390,16 @@ if __name__ == "__main__":
         try:
             # Route index 1 in sse_app is typically the Mount for self.settings.message_path
             handle_post_message = sse_app.routes[1].app
-            routes.append(Route("/sse", endpoint=handle_post_message, methods=["POST"]))
+            
+            class NoOpResponse(Response):
+                async def __call__(self, scope, receive, send) -> None:
+                    pass
+
+            async def post_message_endpoint(request: Request) -> Response:
+                await handle_post_message(request.scope, request.receive, request._send)
+                return NoOpResponse()
+
+            routes.append(Route("/sse", endpoint=post_message_endpoint, methods=["POST"]))
             logger.info("Added compatibility route POST /sse -> handle_post_message")
         except Exception as e:
             logger.error(f"Failed to add compatibility route POST /sse: {e}")
