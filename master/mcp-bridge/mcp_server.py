@@ -349,7 +349,7 @@ if __name__ == "__main__":
     
     if mode == "sse" or "--sse" in sys.argv:
         logger.info("Starting MCP Server in SSE (HTTP) mode on port 8000")
-        mcp.run("sse")
+        mcp.run(transport="sse", host="0.0.0.0", port=8000)
     else:
         logger.info("Starting MCP Server in Stdio mode")
         mcp.run("stdio")
