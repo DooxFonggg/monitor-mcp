@@ -16,45 +16,77 @@ The MCP server exposes the following capabilities:
 
 ## 🚀 Connection Modes
 
-### 1. Stdio Mode (Recommended for Cursor / VS Code / Claude CLI)
+The MCP Server (`mcp-bridge`) runs in **SSE Mode (Server-Sent Events)** on port `8000` of the Master server (`10.10.10.7`). Here is how you can connect your LLM clients to it:
 
-Stdio mode runs the Python script directly on your host machine. Your LLM client will spawn it as a background process.
+### 1. Claude CLI / Claude Desktop (`claudecli`)
+Claude Desktop runs locally and natively supports standard I/O (`stdio`). You can use the `mcp-remote` package via `npx` as a bridge proxy to connect to the remote SSE server:
 
-#### Prerequisites
-Install the Python dependencies on your host machine:
-```bash
-pip install mcp httpx uvicorn fastapi
-```
-
-#### Configuration for Cursor IDE & Claude Desktop
-Add the following to your MCP settings file (e.g. `%APPDATA%/Claude/claude_desktop_config.json` or Cursor's MCP Settings):
-
-```json
-{
-  "mcpServers": {
-    "monitoring-mcp": {
-      "command": "python",
-      "args": [
-        "d:/devops/monitoring/grafana-prometeus-loki-alloy/master/mcp-bridge/mcp_server.py"
-      ],
-      "env": {
-        "PROMETHEUS_URL": "http://localhost:9090",
-        "LOKI_URL": "http://localhost:3100",
-        "MCP_MODE": "stdio"
-      }
-    }
-  }
-}
-```
+1. Ensure Node.js and `npm` are installed on your client machine.
+2. Open your Claude Desktop configuration file:
+   * **Windows**: `%APPDATA%\Claude\claude_desktop_config.json`
+   * **macOS**: `~/Library/Application Support/Claude/claude_desktop_config.json`
+3. Add the following entry to the `mcpServers` block:
+   ```json
+   {
+     "mcpServers": {
+       "monitoring-mcp": {
+         "command": "npx",
+         "args": [
+           "-y",
+           "mcp-remote",
+           "http://10.10.10.7:8000/sse"
+         ]
+       }
+     }
+   }
+   ```
+4. Completely restart the Claude Desktop application.
 
 ---
 
-### 2. SSE Mode (For Web clients / OpenWebUI)
+### 2. VSCode / Cursor (`vscode`)
 
-When you run `docker-compose up -d` in the `master` folder, the MCP bridge runs inside Docker in **SSE (Server-Sent Events) mode** and binds to port `8000`.
+#### A. Cline / Roo Code Extension in VSCode
+1. Open the **Cline** sidebar panel.
+2. Click the **MCP Servers** (plug/stacked server) icon at the top right of the panel.
+3. Select **Edit Global MCP** (or **Edit Project MCP**).
+4. Add the SSE server directly:
+   ```json
+   {
+     "mcpServers": {
+       "monitoring-mcp": {
+         "type": "sse",
+         "url": "http://10.10.10.7:8000/sse",
+         "disabled": false
+       }
+     }
+   }
+   ```
 
-You can access the MCP server at:
-- SSE endpoint: `http://localhost:8000/sse`
-- Tools endpoint: `http://localhost:8000/tools`
+#### B. Cursor IDE
+1. Open **Cursor Settings** -> go to **Features** -> scroll down to the **MCP** section.
+2. Click **+ Add New MCP Server**.
+3. Fill in the following details:
+   * **Name**: `monitoring-mcp`
+   * **Type**: `SSE`
+   * **URL**: `http://10.10.10.7:8000/sse`
+4. Click **Save**.
 
-You can connect web UI clients (like OpenWebUI) directly to `http://localhost:8000/sse`.
+---
+
+### 3. Antigravity IDE / Agent (`antigravity`)
+Antigravity IDE supports connecting directly to remote SSE MCP servers using the `mcp_config.json` configuration file.
+
+1. Open the **Agent Panel** inside Antigravity IDE.
+2. Click the **"..."** dropdown -> select **"Manage MCP Servers"** -> click **"View raw config"** (or open the file `%USERPROFILE%\.gemini\antigravity-ide\mcp_config.json` directly).
+3. Add the server entry:
+   ```json
+   {
+     "mcpServers": {
+       "monitoring-mcp": {
+         "url": "http://10.10.10.7:8000/sse"
+       }
+     }
+   }
+   ```
+4. Save the file. The Agent will automatically detect the server and import the tools (`query_metrics`, `query_logs`, `get_system_status`, `explain_root_cause`).

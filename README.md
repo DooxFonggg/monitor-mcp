@@ -130,39 +130,86 @@ Lệnh này sẽ khởi tạo toàn bộ hạ tầng lưu trữ và hiển thị
 
 ---
 
-## 🤖 Kết Nối MCP Server Vào AI Clients (Cursor / Claude CLI / VS Code)
+## 🤖 Kết Nối MCP Server Vào AI Clients (Claude CLI, VSCode/Cursor, Antigravity)
 
-MCP Server (`mcp-bridge`) hoạt động theo 2 chế độ:
-1. **SSE Mode (HTTP)**: Tự động chạy trong container Docker tại port `8000` để các ứng dụng Web/OpenWebUI kết nối qua endpoint `/sse`.
-2. **Stdio Mode (Khuyên Dùng)**: Chạy trực tiếp từ dòng lệnh Python trên máy cá nhân để Cursor IDE hoặc Claude CLI giao tiếp trực tiếp qua Stdio.
+MCP Server (`mcp-bridge`) chạy dưới dạng **SSE Mode (Server-Sent Events)** tại cổng `8000` của server Master (`10.10.10.7`). Dưới đây là cách cấu hình chi tiết cho 3 loại AI Client phổ biến để truy vấn trực tiếp dữ liệu logs & metrics:
 
-### Hướng dẫn kết nối Cursor IDE / Claude Desktop (Stdio Mode)
+### 1. Claude CLI / Claude Desktop (`claudecli`)
+Vì Claude Desktop chạy local và chủ yếu hỗ trợ giao thức `stdio` mặc định, chúng ta sử dụng gói `mcp-remote` (thông qua `npx`) làm proxy bridge để kết nối tới server SSE từ xa.
 
-1. Đảm bảo máy chạy AI client đã cài đặt thư viện cần thiết:
-   ```bash
-   pip install mcp httpx uvicorn fastapi
-   ```
-2. Thêm cấu hình sau vào phần cài đặt MCP của **Cursor IDE** hoặc file cấu hình **Claude Desktop** (`%APPDATA%/Claude/claude_desktop_config.json` trên Windows):
-
+1. Đảm bảo máy chạy Claude Desktop đã cài đặt Node.js/npm.
+2. Mở file cấu hình `claude_desktop_config.json`:
+   * **Windows**: `%APPDATA%\Claude\claude_desktop_config.json`
+   * **macOS**: `~/Library/Application Support/Claude/claude_desktop_config.json`
+3. Thêm cấu hình mcp server như sau:
    ```json
    {
      "mcpServers": {
        "monitoring-mcp": {
-         "command": "python",
+         "command": "npx",
          "args": [
-           "d:/devops/monitoring/grafana-prometeus-loki-alloy/master/mcp-bridge/mcp_server.py"
-         ],
-         "env": {
-           "PROMETHEUS_URL": "http://localhost:9090",
-           "LOKI_URL": "http://localhost:3100",
-           "MCP_MODE": "stdio"
-         }
+           "-y",
+           "mcp-remote",
+           "http://10.10.10.7:8000/sse"
+         ]
+       }
+     }
+   }
+   ```
+4. Khởi động lại (completely restart) ứng dụng Claude Desktop.
+
+---
+
+### 2. VSCode / Cursor IDE (`vscode`)
+
+#### A. Đối với extension Cline / Roo Code trên VSCode
+1. Mở panel **Cline** trên sidebar.
+2. Nhấn vào biểu tượng **MCP Servers** (hình ổ cắm điện/ổ cứng xếp chồng) ở góc trên.
+3. Chọn **Edit Global MCP** (hoặc **Edit Project MCP**).
+4. Thêm cấu hình server SSE trực tiếp:
+   ```json
+   {
+     "mcpServers": {
+       "monitoring-mcp": {
+         "type": "sse",
+         "url": "http://10.10.10.7:8000/sse",
+         "disabled": false
        }
      }
    }
    ```
 
-3. Sử dụng AI để phân tích sự cố:
-   * Bạn có thể hỏi Cursor hoặc Claude CLI các câu hỏi như:
-     * *"Kiểm tra tài nguyên RAM, CPU hiện tại của các máy chủ giúp tôi"* (AI sẽ tự động gọi tool `get_system_status`).
-     * *"Xem thử container fake-logs có lỗi gì không và kiểm tra tài nguyên của nó"* (AI sẽ gọi tool `explain_root_cause` để gộp log lỗi và CPU/RAM lại phân tích tìm nguyên nhân gốc rễ).
+#### B. Đối với Cursor IDE
+1. Mở **Settings** -> chọn tab **Features** -> cuộn xuống phần **MCP**.
+2. Nhấn nút **+ Add New MCP Server**.
+3. Điền thông tin cấu hình:
+   * **Name**: `monitoring-mcp`
+   * **Type**: `SSE`
+   * **URL**: `http://10.10.10.7:8000/sse`
+4. Chọn **Save**.
+
+---
+
+### 3. Antigravity IDE / Agent (`antigravity`)
+Antigravity IDE hỗ trợ kết nối trực tiếp đến các SSE MCP server thông qua file cấu hình `mcp_config.json`.
+
+1. Truy cập panel điều khiển **Agent Panel** trong Antigravity IDE.
+2. Click vào biểu tượng ba chấm **"..."** -> chọn **"Manage MCP Servers"** -> chọn **"View raw config"** (hoặc mở trực tiếp file `%USERPROFILE%\.gemini\antigravity-ide\mcp_config.json`).
+3. Cập nhật cấu hình:
+   ```json
+   {
+     "mcpServers": {
+       "monitoring-mcp": {
+         "url": "http://10.10.10.7:8000/sse"
+       }
+     }
+   }
+   ```
+4. Lưu tệp và Agent sẽ tự động nạp các công cụ (`query_metrics`, `query_logs`, `get_system_status`, `explain_root_cause`).
+
+---
+
+### 💡 Ví dụ câu lệnh prompt sử dụng AI kết hợp MCP:
+* *"Hãy kiểm tra tài nguyên hệ thống hiện tại của toàn bộ các server"* (gọi tool `get_system_status`).
+* *"Đọc log của container fake-logs trong 5 phút qua xem có lỗi gì không"* (gọi tool `query_logs`).
+* *"Container fake-logs bị lỗi gì thế? Hãy kiểm tra tài nguyên của nó và giải thích nguyên nhân gốc"* (gọi tool `explain_root_cause`).
