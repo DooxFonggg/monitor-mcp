@@ -395,7 +395,7 @@ if __name__ == "__main__":
             async def http_endpoint(request: Request) -> Response:
                 await http_asgi(request.scope, request.receive, request._send)
                 return NoOpResponse()
-            routes.append(Route("/mcp", endpoint=http_endpoint))
+            routes.append(Route("/mcp", endpoint=http_endpoint, methods=["GET", "POST", "OPTIONS"]))
             logger.info("Added wrapped Route for /mcp")
         except Exception as e:
             logger.error(f"Failed to wrap /mcp route: {e}")
@@ -409,7 +409,7 @@ if __name__ == "__main__":
             async def post_message_endpoint(request: Request) -> Response:
                 await handle_post_message(request.scope, request.receive, request._send)
                 return NoOpResponse()
-            routes.append(Route("/sse", endpoint=post_message_endpoint, methods=["POST"]))
+            routes.append(Route("/sse", endpoint=post_message_endpoint, methods=["POST", "OPTIONS"]))
             logger.info("Added compatibility route POST /sse -> handle_post_message")
         except Exception as e:
             logger.error(f"Failed to add compatibility route POST /sse: {e}")
