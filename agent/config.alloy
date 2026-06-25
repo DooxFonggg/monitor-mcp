@@ -46,8 +46,12 @@ prometheus.scrape "cadvisor" {
 }
 
 // 3. Collect Docker Container Logs
-loki.relabel "docker_logs" {
-  forward_to = [loki.write.loki_master.receiver]
+discovery.docker "containers" {
+  host = "unix:///var/run/docker.sock"
+}
+
+discovery.relabel "docker_logs" {
+  targets = discovery.docker.containers.targets
 
   rule {
     source_labels = ["__meta_docker_container_name"]
@@ -68,7 +72,8 @@ loki.relabel "docker_logs" {
 
 loki.source.docker "docker_logs" {
   host       = "unix:///var/run/docker.sock"
-  targets    = [loki.relabel.docker_logs.receiver]
+  targets    = discovery.relabel.docker_logs.output
+  forward_to = [loki.write.loki_master.receiver]
 }
 
 // 4. Collect System Log Files
