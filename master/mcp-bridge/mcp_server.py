@@ -414,7 +414,7 @@ if __name__ == "__main__":
         except Exception as e:
             logger.error(f"Failed to add compatibility route POST /sse: {e}")
             
-        app = Starlette(debug=mcp.settings.debug, routes=routes)
+        app = Starlette(debug=mcp.settings.debug, routes=routes, lifespan=http_app.router.lifespan_context)
         uvicorn.run(app, host=mcp.settings.host, port=mcp.settings.port)
     else:
         logger.info("Starting MCP Server in Stdio mode")
