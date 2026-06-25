@@ -127,6 +127,35 @@ loki.source.file "syslogs" {
   forward_to = [loki.relabel.syslogs.receiver]
 }
 
+// 5. Collect Systemd Journal Logs
+loki.source.journal "systemd_logs" {
+  forward_to = [loki.relabel.systemd_logs.receiver]
+}
+
+loki.relabel "systemd_logs" {
+  forward_to = [loki.write.local_loki.receiver]
+
+  rule {
+    target_label = "job"
+    replacement  = "systemd"
+  }
+
+  rule {
+    target_label = "instance"
+    replacement  = env("AGENT_NAME")
+  }
+
+  rule {
+    target_label = "host_ip"
+    replacement  = env("HOST_IP")
+  }
+
+  rule {
+    source_labels = ["__journal__systemd_unit"]
+    target_label  = "unit"
+  }
+}
+
 // 5. Outputs to Prometheus and Loki
 prometheus.remote_write "local_prometheus" {
   endpoint {

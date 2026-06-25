@@ -127,6 +127,35 @@ loki.source.file "syslogs" {
   forward_to = [loki.relabel.syslogs.receiver]
 }
 
+// 5. Collect Systemd Journal Logs
+loki.source.journal "systemd_logs" {
+  forward_to = [loki.relabel.systemd_logs.receiver]
+}
+
+loki.relabel "systemd_logs" {
+  forward_to = [loki.write.loki_master.receiver]
+
+  rule {
+    target_label = "job"
+    replacement  = "systemd"
+  }
+
+  rule {
+    target_label = "instance"
+    replacement  = env("AGENT_NAME")
+  }
+
+  rule {
+    target_label = "host_ip"
+    replacement  = env("HOST_IP")
+  }
+
+  rule {
+    source_labels = ["__journal__systemd_unit"]
+    target_label  = "unit"
+  }
+}
+
 // 5. Outputs targeting Master Node (endpoints retrieved via environment variables)
 prometheus.remote_write "prometheus_master" {
   endpoint {
