@@ -18,6 +18,8 @@ services:
       - /sys:/sys:ro
       - /var/lib/docker:/var/lib/docker:ro
       - /cgroup:/cgroup:ro
+    command:
+      - '--disable_metrics=disk'
     restart: always
     expose:
       - 8080
