@@ -1,60 +1,184 @@
+# ==============================================================================
+# PROMETHEUS ALERT RULES CONFIGURATION (SENIOR DEVOPS EDITION)
+# ==============================================================================
+# File này chứa các luật cảnh báo được phân loại rõ ràng theo mức độ nghiêm trọng:
+# 1. Critical (Cao - Đỏ)   : Cần xử lý ngay lập tức để tránh sập hệ thống (System downtime).
+# 2. Warning (Trung bình - Vàng): Hệ thống bị suy giảm hiệu năng hoặc tài nguyên sắp cạn kiệt.
+# 3. Info (Thấp - Xanh)    : Các thông tin cảnh báo sớm hoặc hành vi bất thường nhẹ.
+# ==============================================================================
+
 groups:
-- name: targets
-  rules:
-  - alert: monitor_service_down
-    expr: up == 0
-    for: 30s
-    labels:
-      severity: critical
-    annotations:
-      summary: "Monitor service non-operational"
-      description: "Service {{ $labels.instance }} is down."
+  # ============================================================================
+  # GROUP 1: MONITOR SERVICE STATUS (TRẠNG THÁI CÁC DỊCH VỤ GIÁM SÁT)
+  # ============================================================================
+  - name: monitor_services
+    rules:
+      # Cảnh báo khi có bất kỳ endpoint nào bị mất kết nối (down)
+      - alert: ServiceDown
+        expr: up == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Dịch vụ quan trọng bị dừng (Instance: {{ $labels.instance }})"
+          description: "Endpoint {{ $labels.instance }} của job {{ $labels.job }} không phản hồi trong hơn 1 phút."
 
-- name: host
-  rules:
-  - alert: high_cpu_load
-    expr: node_load1 > 1.5
-    for: 30s
-    labels:
-      severity: warning
-    annotations:
-      summary: "Server under high load"
-      description: "Docker host is under high load, the avg load 1m is at {{ $value }}. Reported by instance {{ $labels.instance }} of job {{ $labels.job }}."
+      # Cảnh báo khi reload cấu hình Prometheus thất bại
+      - alert: PrometheusConfigReloadFailed
+        expr: prometheus_config_last_reload_successful == 0
+        for: 1m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Reload cấu hình Prometheus thất bại"
+          description: "Cấu hình mới của Prometheus bị lỗi cú pháp và không thể áp dụng."
 
-  - alert: high_memory_load
-    expr: (sum(node_memory_MemTotal_bytes) - sum(node_memory_MemFree_bytes + node_memory_Buffers_bytes + node_memory_Cached_bytes) ) / sum(node_memory_MemTotal_bytes) * 100 > 85
-    for: 30s
-    labels:
-      severity: warning
-    annotations:
-      summary: "Server memory is almost full"
-      description: "Docker host memory usage is {{ humanize $value }}%. Reported by instance {{ $labels.instance }} of job {{ $labels.job }}."
+  # ============================================================================
+  # GROUP 2: HOST RESOURCE MONITORING (TÀI NGUYÊN MÁY CHỦ HOST)
+  # ============================================================================
+  - name: host_resources
+    rules:
+      # CPU CRITICAL: CPU của Host vượt quá 95% liên tục trong 2 phút
+      - alert: HostCpuUsageCritical
+        expr: 100 - (avg by(instance) (rate(node_cpu_seconds_total{mode="idle"}[2m])) * 100) > 95
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "CPU máy chủ quá tải nghiêm trọng (Host: {{ $labels.instance }})"
+          description: "Sử dụng CPU hiện tại là {{ humanize $value }}% (Vượt ngưỡng 95% trong 2 phút)."
 
-  - alert: high_storage_load
-    expr: (node_filesystem_size_bytes{mountpoint="/"} - node_filesystem_free_bytes{mountpoint="/"}) / node_filesystem_size_bytes{mountpoint="/"} * 100 > 85
-    for: 30s
-    labels:
-      severity: warning
-    annotations:
-      summary: "Server storage is almost full"
-      description: "Docker host storage usage is {{ humanize $value }}%. Reported by instance {{ $labels.instance }} of job {{ $labels.job }}."
+      # CPU WARNING: CPU của Host vượt quá 80% liên tục trong 5 phút
+      - alert: HostCpuUsageWarning
+        expr: 100 - (avg by(instance) (rate(node_cpu_seconds_total{mode="idle"}[2m])) * 100) > 80
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "CPU máy chủ tăng cao (Host: {{ $labels.instance }})"
+          description: "Sử dụng CPU hiện tại là {{ humanize $value }}% (Vượt ngưỡng 80% trong 5 phút)."
 
-- name: containers
-  rules:
-  - alert: container_down
-    expr: absent(container_memory_usage_bytes{name="fake-logs"})
-    for: 30s
-    labels:
-      severity: critical
-    annotations:
-      summary: "Container down"
-      description: "Container fake-logs is down for more than 30 seconds."
+      # CPU INFO: Tải hệ thống (Load Average) vượt quá số core CPU khả dụng
+      - alert: HostCpuLoadAverageHigh
+        expr: node_load1 > count(node_cpu_seconds_total{mode="system"}) * 1.2
+        for: 5m
+        labels:
+          severity: info
+        annotations:
+          summary: "Tải hệ thống cao (Host: {{ $labels.instance }})"
+          description: "Chỉ số Load Average 1m là {{ $value }}, vượt quá 120% số lượng CPU core hiện có."
 
-  - alert: container_high_cpu
-    expr: sum(rate(container_cpu_usage_seconds_total{name="fake-logs"}[1m])) / count(node_cpu_seconds_total{mode="system"}) * 100 > 50
-    for: 30s
-    labels:
-      severity: warning
-    annotations:
-      summary: "Container high CPU usage"
-      description: "Container fake-logs CPU usage is {{ humanize $value }}%."
+      # MEMORY CRITICAL: RAM khả dụng dưới 5% liên tục trong 2 phút
+      - alert: HostMemoryCritical
+        expr: (node_memory_MemTotal_bytes - node_memory_MemAvailable_bytes) / node_memory_MemTotal_bytes * 100 > 95
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Bộ nhớ RAM sắp cạn kiệt (Host: {{ $labels.instance }})"
+          description: "Sử dụng RAM đã đạt {{ humanize $value }}% (Chỉ còn dưới 5% dung lượng trống)."
+
+      # MEMORY WARNING: RAM khả dụng dưới 15% liên tục trong 3 phút
+      - alert: HostMemoryWarning
+        expr: (node_memory_MemTotal_bytes - node_memory_MemAvailable_bytes) / node_memory_MemTotal_bytes * 100 > 85
+        for: 3m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Bộ nhớ RAM tăng cao (Host: {{ $labels.instance }})"
+          description: "Sử dụng RAM đã đạt {{ humanize $value }}% (Trống dưới 15%)."
+
+      # DISK SPACE CRITICAL: Phân vùng gốc (/) dung lượng trống dưới 5%
+      - alert: HostDiskSpaceCritical
+        expr: (node_filesystem_size_bytes{mountpoint="/"} - node_filesystem_free_bytes{mountpoint="/"}) / node_filesystem_size_bytes{mountpoint="/"} * 100 > 95
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Ổ cứng sắp đầy (Host: {{ $labels.instance }})"
+          description: "Phân vùng root (/) đã sử dụng {{ humanize $value }}% dung lượng (Trống dưới 5%). Hệ thống có thể bị khóa ghi đĩa."
+
+      # DISK SPACE WARNING: Phân vùng gốc (/) dung lượng trống dưới 15%
+      - alert: HostDiskSpaceWarning
+        expr: (node_filesystem_size_bytes{mountpoint="/"} - node_filesystem_free_bytes{mountpoint="/"}) / node_filesystem_size_bytes{mountpoint="/"} * 100 > 85
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Ổ cứng sắp đầy (Host: {{ $labels.instance }})"
+          description: "Phân vùng root (/) đã sử dụng {{ humanize $value }}% dung lượng (Trống dưới 15%)."
+
+      # DISK PREDICTIVE WARNING: Dự báo ổ cứng sẽ đầy trong vòng 24 giờ tới dựa trên tốc độ ghi hiện tại
+      - alert: HostDiskFillingUpIn24Hours
+        expr: predict_linear(node_filesystem_free_bytes{mountpoint="/"}[1h], 86400) < 0
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Cảnh báo sớm: Ổ cứng sẽ đầy trong 24 giờ tới (Host: {{ $labels.instance }})"
+          description: "Dựa trên xu hướng ghi đĩa trong 1 giờ qua, ổ đĩa sẽ hết dung lượng trống trong vòng 24 giờ tới."
+
+      # NETWORK WARNING: Có lỗi xảy ra trên luồng nhận hoặc gửi gói tin mạng
+      - alert: HostNetworkErrors
+        expr: rate(node_network_receive_errs_total[2m]) > 5 or rate(node_network_transmit_errs_total[2m]) > 5
+        for: 1m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Phát hiện lỗi truyền tải mạng (Host: {{ $labels.instance }})"
+          description: "Thiết bị mạng đang gặp lỗi nhận hoặc gửi gói tin (> 5 lỗi/giây)."
+
+  # ============================================================================
+  # GROUP 3: DOCKER CONTAINER MONITORING (GIÁM SÁT CONTAINER DOCKER)
+  # ============================================================================
+  - name: docker_containers
+    rules:
+      # CONTAINER CRITICAL: Cảnh báo khi container mong muốn (ví dụ: fake-logs) không còn chạy
+      - alert: SpecificContainerDown
+        expr: absent(container_memory_usage_bytes{name="fake-logs"})
+        for: 30s
+        labels:
+          severity: critical
+        annotations:
+          summary: "Container fake-logs bị sập"
+          description: "Không tìm thấy dữ liệu bộ nhớ của container 'fake-logs' trong hơn 30 giây."
+
+      # CONTAINER WARNING: Phát hiện vòng lặp restart (Restart Loop / CrashLoopBackOff)
+      - alert: ContainerRestartLoop
+        expr: changes(container_start_time_seconds{name!=""}[15m]) > 2
+        for: 1m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Container liên tục khởi động lại (Container: {{ $labels.name }})"
+          description: "Container '{{ $labels.name }}' trên node '{{ $labels.instance }}' đã khởi động lại hơn 2 lần trong vòng 15 phút qua."
+
+      # CONTAINER WARNING: Container sử dụng RAM vượt quá 85% giới hạn cấu hình (Limit)
+      - alert: ContainerMemoryUsageWarning
+        expr: (container_memory_working_set_bytes{name!=""} / container_spec_memory_limit_bytes{name!=""}) * 100 > 85
+        for: 3m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Container sử dụng RAM cao (Container: {{ $labels.name }})"
+          description: "Container '{{ $labels.name }}' đã dùng {{ humanize $value }}% lượng RAM được giới hạn (Vượt ngưỡng 85%)."
+
+      # CONTAINER CRITICAL: Container sử dụng RAM vượt quá 95% giới hạn (Nguy cơ OOMKilled)
+      - alert: ContainerMemoryUsageCritical
+        expr: (container_memory_working_set_bytes{name!=""} / container_spec_memory_limit_bytes{name!=""}) * 100 > 95
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Nguy cơ OOM: Container cạn kiệt RAM (Container: {{ $labels.name }})"
+          description: "Container '{{ $labels.name }}' đã dùng {{ humanize $value }}% lượng RAM tối đa. Nguy cơ cao bị hệ điều hành tắt do hết bộ nhớ (OOM Killed)."
+
+      # CONTAINER INFO: Phát hiện Container CPU cao
+      - alert: ContainerCpuUsageHigh
+        expr: sum by(instance, name) (rate(container_cpu_usage_seconds_total{name!=""}[2m])) * 100 > 80
+        for: 5m
+        labels:
+          severity: info
+        annotations:
+          summary: "Container CPU tăng cao (Container: {{ $labels.name }})"
+          description: "Container '{{ $labels.name }}' đang tiêu hao {{ humanize $value }}% CPU core liên tục trong 5 phút."
