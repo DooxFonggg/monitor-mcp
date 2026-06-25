@@ -19,6 +19,8 @@ services:
       - /sys:/sys:ro
       - /var/lib/docker:/var/lib/docker:ro
       - /cgroup:/cgroup:ro
+    environment:
+      - TZ=Asia/Ho_Chi_Minh
     command:
       - '--disable_metrics=disk,referenced_memory'
       - '--docker_only=true'
@@ -45,6 +47,7 @@ services:
       - PROMETHEUS_URL=${PROMETHEUS_URL:-http://localhost:9090/api/v1/write}
       - LOKI_URL=${LOKI_URL:-http://localhost:3100/loki/api/v1/push}
       - AGENT_NAME=${AGENT_NAME:-edge-01}
+      - TZ=Asia/Ho_Chi_Minh
     command:
       - run
       - --server.http.listen-addr=0.0.0.0:12345
