@@ -1,0 +1,51 @@
+version: "3.8"
+
+networks:
+  agent-net:
+    driver: bridge
+
+services:
+
+  cadvisor:
+    image: gcr.io/cadvisor/cadvisor:v0.49.1
+    container_name: cadvisor
+    privileged: true
+    devices:
+      - /dev/kmsg:/dev/kmsg
+    volumes:
+      - /:/rootfs:ro
+      - /var/run:/var/run:ro
+      - /sys:/sys:ro
+      - /var/lib/docker:/var/lib/docker:ro
+      - /cgroup:/cgroup:ro
+    restart: always
+    expose:
+      - 8080
+    networks:
+      - agent-net
+    labels:
+      org.label-schema.group: "monitoring"
+
+  alloy:
+    image: grafana/alloy:v1.1.1
+    container_name: alloy
+    privileged: true
+    volumes:
+      - ./config.alloy:/etc/alloy/config.alloy:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - /var/log:/var/log:ro
+    environment:
+      # REPLACE <master-ip> with the actual IP address of your centralized master node
+      - PROMETHEUS_URL=http://<master-ip>:9090/api/v1/write
+      - LOKI_URL=http://<master-ip>:3100/loki/api/v1/push
+      # Tên gợi nhớ của agent này (ví dụ: timescaledb-01, edge-01)
+      - AGENT_NAME=edge-01
+    command:
+      - run
+      - --server.http.listen-addr=0.0.0.0:12345
+      - /etc/alloy/config.alloy
+    restart: always
+    networks:
+      - agent-net
+    labels:
+      org.label-schema.group: "monitoring"

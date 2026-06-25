@@ -1,0 +1,112 @@
+// GRAFANA ALLOY CONFIGURATION FOR CLIENT/AGENT NODES
+
+// 1. Collect Host Metrics (equivalent to Node Exporter)
+prometheus.exporter.unix "agent_host" {
+}
+
+prometheus.relabel "agent_host" {
+  forward_to = [prometheus.remote_write.prometheus_master.receiver]
+
+  rule {
+    target_label = "job"
+    replacement  = "nodeexporter"
+  }
+
+  rule {
+    target_label = "instance"
+    replacement  = sys.env("AGENT_NAME")
+  }
+}
+
+prometheus.scrape "agent_host" {
+  targets    = prometheus.exporter.unix.agent_host.targets
+  forward_to = [prometheus.relabel.agent_host.receiver]
+}
+
+// 2. Collect Container Metrics from local cAdvisor
+prometheus.relabel "cadvisor" {
+  forward_to = [prometheus.remote_write.prometheus_master.receiver]
+
+  rule {
+    target_label = "job"
+    replacement  = "cadvisor"
+  }
+
+  rule {
+    target_label = "instance"
+    replacement  = sys.env("AGENT_NAME")
+  }
+}
+
+prometheus.scrape "cadvisor" {
+  targets = [
+    {"__address__" = "cadvisor:8080"},
+  ]
+  forward_to = [prometheus.relabel.cadvisor.receiver]
+}
+
+// 3. Collect Docker Container Logs
+loki.relabel "docker_logs" {
+  forward_to = [loki.write.loki_master.receiver]
+
+  rule {
+    source_labels = ["__meta_docker_container_name"]
+    regex         = "/(.*)"
+    target_label  = "container"
+  }
+
+  rule {
+    target_label = "job"
+    replacement  = "docker"
+  }
+
+  rule {
+    target_label = "instance"
+    replacement  = sys.env("AGENT_NAME")
+  }
+}
+
+loki.source.docker "docker_logs" {
+  host       = "unix:///var/run/docker.sock"
+  targets    = [loki.relabel.docker_logs.receiver]
+}
+
+// 4. Collect System Log Files
+local.file_match "syslogs" {
+  path_targets = [
+    { "__path__" = "/var/log/*.log" },
+    { "__path__" = "/var/log/syslog" },
+  ]
+}
+
+loki.relabel "syslogs" {
+  forward_to = [loki.write.loki_master.receiver]
+
+  rule {
+    target_label = "job"
+    replacement  = "varlogs"
+  }
+
+  rule {
+    target_label = "instance"
+    replacement  = sys.env("AGENT_NAME")
+  }
+}
+
+loki.source.file "syslogs" {
+  targets    = local.file_match.syslogs.targets
+  forward_to = [loki.relabel.syslogs.receiver]
+}
+
+// 5. Outputs targeting Master Node (endpoints retrieved via environment variables)
+prometheus.remote_write "prometheus_master" {
+  endpoint {
+    url = sys.env("PROMETHEUS_URL")
+  }
+}
+
+loki.write "loki_master" {
+  endpoint {
+    url = sys.env("LOKI_URL")
+  }
+}

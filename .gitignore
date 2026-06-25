@@ -1,0 +1,12 @@
+domolo
+
+# Đè lên các file
+!__pycache__/
+!__pycache__/**/*
+.vscode/
+.claude/
+*.pyc
+*.pyo
+*.pyd
+.env
+

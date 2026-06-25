@@ -1,0 +1,112 @@
+// GRAFANA ALLOY CONFIGURATION FOR MASTER NODE
+
+// 1. Collect Host Metrics (equivalent to Node Exporter)
+prometheus.exporter.unix "local" {
+}
+
+prometheus.relabel "local_host" {
+  forward_to = [prometheus.remote_write.local_prometheus.receiver]
+
+  rule {
+    target_label = "job"
+    replacement  = "nodeexporter"
+  }
+
+  rule {
+    target_label = "instance"
+    replacement  = sys.env("AGENT_NAME")
+  }
+}
+
+prometheus.scrape "local_host" {
+  targets    = prometheus.exporter.unix.local.targets
+  forward_to = [prometheus.relabel.local_host.receiver]
+}
+
+// 2. Collect Container Metrics from local cAdvisor
+prometheus.relabel "cadvisor" {
+  forward_to = [prometheus.remote_write.local_prometheus.receiver]
+
+  rule {
+    target_label = "job"
+    replacement  = "cadvisor"
+  }
+
+  rule {
+    target_label = "instance"
+    replacement  = sys.env("AGENT_NAME")
+  }
+}
+
+prometheus.scrape "cadvisor" {
+  targets = [
+    {"__address__" = "cadvisor:8080"},
+  ]
+  forward_to = [prometheus.relabel.cadvisor.receiver]
+}
+
+// 3. Collect Docker Container Logs
+loki.relabel "docker_logs" {
+  forward_to = [loki.write.local_loki.receiver]
+
+  rule {
+    source_labels = ["__meta_docker_container_name"]
+    regex         = "/(.*)"
+    target_label  = "container"
+  }
+
+  rule {
+    target_label = "job"
+    replacement  = "docker"
+  }
+
+  rule {
+    target_label = "instance"
+    replacement  = sys.env("AGENT_NAME")
+  }
+}
+
+loki.source.docker "docker_logs" {
+  host       = "unix:///var/run/docker.sock"
+  targets    = [loki.relabel.docker_logs.receiver]
+}
+
+// 4. Collect System Log Files
+local.file_match "syslogs" {
+  path_targets = [
+    { "__path__" = "/var/log/*.log" },
+    { "__path__" = "/var/log/syslog" },
+  ]
+}
+
+loki.relabel "syslogs" {
+  forward_to = [loki.write.local_loki.receiver]
+
+  rule {
+    target_label = "job"
+    replacement  = "varlogs"
+  }
+
+  rule {
+    target_label = "instance"
+    replacement  = sys.env("AGENT_NAME")
+  }
+}
+
+loki.source.file "syslogs" {
+  targets    = local.file_match.syslogs.targets
+  forward_to = [loki.relabel.syslogs.receiver]
+}
+
+// 5. Outputs to Prometheus and Loki
+prometheus.remote_write "local_prometheus" {
+  endpoint {
+    url = "http://prometheus:9090/api/v1/write"
+  }
+}
+
+loki.write "local_loki" {
+  endpoint {
+    url = "http://loki:3100/loki/api/v1/push"
+  }
+}
