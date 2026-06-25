@@ -50,4 +50,37 @@ receivers:
     http_config:
       follow_redirects: true
     send_resolved: true
-    parse_mode: ""
+    parse_mode: "HTML"
+    message: |
+      {{- if gt (len .Alerts.Firing) 0 -}}
+      🔥 <b>[FIRING] CÓ {{ .Alerts.Firing | len }} CẢNH BÁO MỚI!</b>
+      ================================
+      {{- range .Alerts.Firing }}
+      🚨 <b>Cảnh báo:</b> <code>{{ .Labels.alertname }}</code>
+      🟢 <b>Thiết bị:</b> <code>{{ .Labels.instance }}</code>
+      {{- if .Labels.name }}
+      📦 <b>Container:</b> <code>{{ .Labels.name }}</code>
+      {{- end }}
+      {{- if .Labels.device }}
+      🔌 <b>Interface:</b> <code>{{ .Labels.device }}</code>
+      {{- end }}
+      🔴 <b>Mức độ:</b> <code>{{ .Labels.severity | toUpper }}</code>
+      📝 <b>Chi tiết:</b> {{ .Annotations.description }}
+      🕒 <b>Thời gian bắt đầu:</b> <i>{{ .StartsAt.Local.Format "15:04:05 02/01/2006" }}</i>
+      --------------------------------
+      {{- end }}
+      {{- end }}
+
+      {{- if gt (len .Alerts.Resolved) 0 -}}
+      ✅ <b>[RESOLVED] ĐÃ PHỤC HỒI {{ .Alerts.Resolved | len }} CẢNH BÁO!</b>
+      ================================
+      {{- range .Alerts.Resolved }}
+      🟢 <b>Cảnh báo:</b> <code>{{ .Labels.alertname }}</code>
+      🟢 <b>Thiết bị:</b> <code>{{ .Labels.instance }}</code>
+      {{- if .Labels.name }}
+      📦 <b>Container:</b> <code>{{ .Labels.name }}</code>
+      {{- end }}
+      🕒 <b>Thời gian phục hồi:</b> <i>{{ .EndsAt.Local.Format "15:04:05 02/01/2006" }}</i>
+      --------------------------------
+      {{- end }}
+      {{- end }}
