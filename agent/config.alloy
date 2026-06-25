@@ -21,8 +21,9 @@ prometheus.relabel "agent_host" {
 }
 
 prometheus.scrape "agent_host" {
-  targets    = prometheus.exporter.unix.agent_host.targets
-  forward_to = [prometheus.relabel.agent_host.receiver]
+  targets         = prometheus.exporter.unix.agent_host.targets
+  forward_to      = [prometheus.relabel.agent_host.receiver]
+  scrape_interval = "15s"
 }
 
 // 2. Collect Container Metrics from local cAdvisor
@@ -44,7 +45,8 @@ prometheus.scrape "cadvisor" {
   targets = [
     {"__address__" = "cadvisor:8080"},
   ]
-  forward_to = [prometheus.relabel.cadvisor.receiver]
+  forward_to      = [prometheus.relabel.cadvisor.receiver]
+  scrape_interval = "15s"
 }
 
 // 3. Collect Docker Container Logs
