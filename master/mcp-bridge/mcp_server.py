@@ -50,6 +50,14 @@ load_dotenv()
 PROMETHEUS_URL = os.environ.get("PROMETHEUS_URL", "http://localhost:9090").rstrip("/")
 LOKI_URL = os.environ.get("LOKI_URL", "http://localhost:3100").rstrip("/")
 
+try:
+    from mcp.server.transport_security import TransportSecuritySettings
+except ImportError:
+    try:
+        from mcp.server.sse import TransportSecuritySettings
+    except ImportError:
+        TransportSecuritySettings = None
+
 # Ensure FastMCP binds to 0.0.0.0 and port 8000 for SSE mode
 os.environ["FASTMCP_HOST"] = os.environ.get("FASTMCP_HOST", "0.0.0.0")
 os.environ["FASTMCP_PORT"] = os.environ.get("FASTMCP_PORT", "8000")
@@ -57,11 +65,14 @@ os.environ["FASTMCP_SERVER_HOST"] = os.environ.get("FASTMCP_SERVER_HOST", "0.0.0
 os.environ["FASTMCP_SERVER_PORT"] = os.environ.get("FASTMCP_SERVER_PORT", "8000")
 
 # Initialize MCP Server
-mcp = FastMCP(
-    "Monitoring Bridge",
-    host=os.environ.get("FASTMCP_HOST", "0.0.0.0"),
-    port=int(os.environ.get("FASTMCP_PORT", "8000"))
-)
+mcp_kwargs = {
+    "host": os.environ.get("FASTMCP_HOST", "0.0.0.0"),
+    "port": int(os.environ.get("FASTMCP_PORT", "8000"))
+}
+if TransportSecuritySettings is not None:
+    mcp_kwargs["transport_security"] = TransportSecuritySettings(enable_dns_rebinding_protection=False)
+
+mcp = FastMCP("Monitoring Bridge", **mcp_kwargs)
 
 def parse_relative_time(t_str: Optional[str]) -> float:
     """Helper to convert relative duration string (e.g., '15m', '2h') to absolute epoch timestamp."""
@@ -358,8 +369,32 @@ if __name__ == "__main__":
     mode = os.environ.get("MCP_MODE", "stdio").strip().lower()
     
     if mode == "sse" or "--sse" in sys.argv:
-        logger.info("Starting MCP Server in SSE (HTTP) mode on port 8000")
-        mcp.run(transport="sse")
+        logger.info("Starting MCP Server in SSE (HTTP) and Streamable HTTP modes on port 8000")
+        import uvicorn
+        from starlette.applications import Starlette
+        from starlette.routing import Route
+        
+        # Get standard SSE and Streamable HTTP Starlette apps
+        sse_app = mcp.sse_app()
+        http_app = mcp.streamable_http_app()
+        
+        # Combine routes from both apps to support all network transport methods
+        routes = []
+        routes.extend(sse_app.routes)
+        routes.extend(http_app.routes)
+        
+        # Add a compatibility route: POST /sse -> sse.handle_post_message
+        # This resolves issues with clients that ignore the event endpoint and POST directly to /sse
+        try:
+            # Route index 1 in sse_app is typically the Mount for self.settings.message_path
+            handle_post_message = sse_app.routes[1].app
+            routes.append(Route("/sse", endpoint=handle_post_message, methods=["POST"]))
+            logger.info("Added compatibility route POST /sse -> handle_post_message")
+        except Exception as e:
+            logger.error(f"Failed to add compatibility route POST /sse: {e}")
+            
+        app = Starlette(debug=mcp.settings.debug, routes=routes)
+        uvicorn.run(app, host=mcp.settings.host, port=mcp.settings.port)
     else:
         logger.info("Starting MCP Server in Stdio mode")
         mcp.run("stdio")
