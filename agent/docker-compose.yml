@@ -38,11 +38,9 @@ services:
       - /var/run/docker.sock:/var/run/docker.sock:ro
       - /var/log:/var/log:ro
     environment:
-      # REPLACE <master-ip> with the actual IP address of your centralized master node
-      - PROMETHEUS_URL=http://<master-ip>:9090/api/v1/write
-      - LOKI_URL=http://<master-ip>:3100/loki/api/v1/push
-      # Tên gợi nhớ của agent này (ví dụ: timescaledb-01, edge-01)
-      - AGENT_NAME=edge-01
+      - PROMETHEUS_URL=${PROMETHEUS_URL:-http://localhost:9090/api/v1/write}
+      - LOKI_URL=${LOKI_URL:-http://localhost:3100/loki/api/v1/push}
+      - AGENT_NAME=${AGENT_NAME:-edge-01}
     command:
       - run
       - --server.http.listen-addr=0.0.0.0:12345

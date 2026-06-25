@@ -97,30 +97,34 @@ Lệnh này sẽ khởi tạo toàn bộ hạ tầng lưu trữ và hiển thị
 ---
 
 ### Bước 2: Khởi động Agent Node (Máy Client cần giám sát)
-Để giám sát một máy chủ khác (Agent), bạn copy thư mục `agent` sang máy đó và thực hiện:
-1. Mở file `agent/docker-compose.yml`.
-2. Thay thế `<master-ip>` bằng IP thực tế của máy chủ Master:
-   ```yaml
-   environment:
-     - PROMETHEUS_URL=http://<YOUR_MASTER_IP>:9090/api/v1/write
-     - LOKI_URL=http://<YOUR_MASTER_IP>:3100/loki/api/v1/push
+Để giám sát một máy chủ khác (Agent), bạn copy thư mục `agent` sang máy đó và thực hiện cấu hình thông qua file `.env`. Việc này giúp bạn dùng chung cấu hình `docker-compose.yml` và `config.alloy` cho mọi Agent mà không cần sửa code bên trong.
+
+1. Tạo file `.env` từ file ví dụ:
+   ```bash
+   cp .env.example .env
    ```
-3. Chạy lệnh:
+   *(Trên Windows PowerShell: `copy .env.example .env`)*
+
+2. Mở file `agent/.env` và cập nhật các thông tin sau:
+   - **PROMETHEUS_URL**: Thay thế `<master-ip>` bằng IP thực tế của máy chủ Master.
+   - **LOKI_URL**: Thay thế `<master-ip>` bằng IP thực tế của máy chủ Master.
+   - **AGENT_NAME**: Đặt tên gợi nhớ cho Agent này (ví dụ: `timescaledb-01`, `edge-01`, ...).
+
+   ```env
+   PROMETHEUS_URL=http://<YOUR_MASTER_IP>:9090/api/v1/write
+   LOKI_URL=http://<YOUR_MASTER_IP>:3100/loki/api/v1/push
+   AGENT_NAME=edge-01
+   ```
+
+3. Khởi động Agent bằng lệnh:
    ```bash
    cd agent
    docker-compose up -d
    ```
 
 > [!TIP]
-> **Cách đặt tên gợi nhớ cho Agent (Ví dụ: `timescaledb-01`, `edge-01`):**
-> - Mở file `agent/docker-compose.yml`, sửa biến môi trường `AGENT_NAME` thành tên bạn mong muốn:
->   ```yaml
->   environment:
->     - PROMETHEUS_URL=http://<YOUR_MASTER_IP>:9090/api/v1/write
->     - LOKI_URL=http://<YOUR_MASTER_IP>:3100/loki/api/v1/push
->     - AGENT_NAME=timescaledb-01  # Đặt tên mong muốn ở đây
->   ```
-> - Grafana Alloy sẽ tự động ghi đè nhãn `instance` của tất cả Metrics và Logs thu thập được từ máy này thành tên bạn đã đặt. Nhờ đó, trên giao diện Grafana hoặc khi truy vấn qua MCP Server, bạn sẽ thấy tên thiết bị thân thiện thay vì địa chỉ IP và Port khó nhớ.
+> **Nhãn `instance` tự động:**
+> Grafana Alloy sẽ tự động sử dụng biến `AGENT_NAME` từ file `.env` làm giá trị nhãn `instance` cho tất cả Metrics và Logs thu thập được từ máy này. Nhờ đó, trên giao diện Grafana hoặc khi truy vấn qua MCP Server, bạn sẽ thấy tên thiết bị thân thiện thay vì địa chỉ IP và Port khó nhớ.
 
 *(Lưu ý: Grafana Alloy trên máy Master cũng tự động thu thập thông số của chính máy Master và được gán nhãn `instance=master-node` mặc định).*
 
