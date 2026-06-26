@@ -40,7 +40,7 @@ groups:
     rules:
       # CPU CRITICAL: CPU của Host vượt quá 95% liên tục trong 2 phút
       - alert: HostCpuUsageCritical
-        expr: 100 - (avg by(instance) (rate(node_cpu_seconds_total{mode="idle"}[2m])) * 100) > 95
+        expr: 100 - (avg by(instance, host_ip) (rate(node_cpu_seconds_total{mode="idle"}[2m])) * 100) > 95
         for: 2m
         labels:
           severity: critical
@@ -50,7 +50,7 @@ groups:
 
       # CPU WARNING: CPU của Host vượt quá 80% liên tục trong 5 phút
       - alert: HostCpuUsageWarning
-        expr: 100 - (avg by(instance) (rate(node_cpu_seconds_total{mode="idle"}[2m])) * 100) > 80
+        expr: 100 - (avg by(instance, host_ip) (rate(node_cpu_seconds_total{mode="idle"}[2m])) * 100) > 80
         for: 5m
         labels:
           severity: warning
@@ -60,7 +60,7 @@ groups:
 
       # CPU INFO: Tải hệ thống (Load Average) vượt quá số core CPU khả dụng
       - alert: HostCpuLoadAverageHigh
-        expr: node_load1 > count(node_cpu_seconds_total{mode="system"}) * 1.2
+        expr: node_load1 > on(instance, host_ip) (count by(instance, host_ip) (node_cpu_seconds_total{mode="system"}) * 1.2)
         for: 5m
         labels:
           severity: info
@@ -133,15 +133,15 @@ groups:
   # ============================================================================
   - name: docker_containers
     rules:
-      # CONTAINER CRITICAL: Cảnh báo khi container mong muốn (ví dụ: fake-logs) không còn chạy
-      - alert: SpecificContainerDown
-        expr: absent(container_memory_usage_bytes{name="fake-logs"})
-        for: 30s
-        labels:
-          severity: critical
-        annotations:
-          summary: "Container fake-logs bị sập"
-          description: "Không tìm thấy dữ liệu bộ nhớ của container 'fake-logs' trong hơn 30 giây."
+      # CONTAINER CRITICAL: Cảnh báo khi container mong muốn (ví dụ: fake-logs) không còn chạy (Đã tắt / Comment)
+      # - alert: SpecificContainerDown
+      #   expr: absent(container_memory_usage_bytes{name="fake-logs"})
+      #   for: 30s
+      #   labels:
+      #     severity: critical
+      #   annotations:
+      #     summary: "Container fake-logs bị sập"
+      #     description: "Không tìm thấy dữ liệu bộ nhớ của container 'fake-logs' trong hơn 30 giây."
 
       # CONTAINER WARNING: Phát hiện vòng lặp restart (Restart Loop / CrashLoopBackOff)
       - alert: ContainerRestartLoop
@@ -175,7 +175,7 @@ groups:
 
       # CONTAINER INFO: Phát hiện Container CPU cao
       - alert: ContainerCpuUsageHigh
-        expr: sum by(instance, name) (rate(container_cpu_usage_seconds_total{name!=""}[2m])) * 100 > 80
+        expr: sum by(instance, name, host_ip) (rate(container_cpu_usage_seconds_total{name!=""}[2m])) * 100 > 80
         for: 5m
         labels:
           severity: info
