@@ -240,7 +240,7 @@ async def get_system_status() -> str:
     """
     cpu_query = "100 - (avg by (instance) (irate(node_cpu_seconds_total{mode='idle'}[5m])) * 100)"
     mem_query = "(node_memory_MemTotal_bytes - node_memory_MemAvailable_bytes) / node_memory_MemTotal_bytes * 100"
-    disk_query = "(node_filesystem_size_bytes{mountpoint='/'} - node_filesystem_free_bytes{mountpoint='/'}) / node_filesystem_size_bytes{mountpoint='/'} * 100"
+    disk_query = "(node_filesystem_size_bytes{fstype=~'ext[2-4]|xfs|btrfs'} - node_filesystem_free_bytes{fstype=~'ext[2-4]|xfs|btrfs'}) / node_filesystem_size_bytes{fstype=~'ext[2-4]|xfs|btrfs'} * 100"
     
     async with httpx.AsyncClient(timeout=10.0) as client:
         try:
@@ -269,28 +269,252 @@ async def get_system_status() -> str:
                 if inst not in status: status[inst] = {}
                 status[inst]["mem"] = round(float(item["value"][1]), 2)
                 
+            disk_usages = {}
             for item in disk_data:
                 inst = item.get("metric", {}).get("instance", "unknown")
-                if inst not in status: status[inst] = {}
-                status[inst]["disk"] = round(float(item["value"][1]), 2)
+                mount = item.get("metric", {}).get("mountpoint", "unknown")
+                if item.get("metric", {}).get("fstype") == "rootfs":
+                    continue
+                usage = round(float(item["value"][1]), 2)
+                if inst not in disk_usages:
+                    disk_usages[inst] = []
+                disk_usages[inst].append(f"{mount}: {usage}%")
                 
             if not status:
                 return "No host metrics currently available. Verify that Grafana Alloy agents are pushing metrics to Prometheus."
                 
             report = ["### 🖥️ Host Resource Usage Status\n"]
-            report.append("| Instance (Host) | CPU Usage | RAM Usage | Root Disk Usage |")
-            report.append("| :--- | :---: | :---: | :---: |")
+            report.append("| Instance (Host) | CPU Usage | RAM Usage | Disk Usage (Mountpoint: %) |")
+            report.append("| :--- | :---: | :---: | :--- |")
             
             for inst, metrics in status.items():
                 cpu = f"{metrics.get('cpu', 'N/A')}%"
                 mem = f"{metrics.get('mem', 'N/A')}%"
-                disk = f"{metrics.get('disk', 'N/A')}%"
-                report.append(f"| {inst} | {cpu} | {mem} | {disk} |")
+                
+                disks = disk_usages.get(inst, [])
+                if disks:
+                    disk_str = ", ".join(disks)
+                else:
+                    disk_str = "N/A"
+                report.append(f"| {inst} | {cpu} | {mem} | {disk_str} |")
                 
             return "\n".join(report)
             
         except Exception as exc:
             return f"Error retrieving system status: {exc}"
+
+@mcp.tool()
+async def get_host_details(instance: str) -> str:
+    """
+    Get detailed resource utilization metrics for a specific host, including CPU cores, load,
+    RAM (total/used/free), Disk Space (size/used/free/mountpoints), Disk IOPS, and Network traffic.
+    Arguments:
+      - instance: The host name or instance identifier (e.g. 'timescaledb-ha-01').
+    """
+    queries = {
+        "cpu_cores": f"count(count(node_cpu_seconds_total{{instance=~'.*{instance}.*'}} ) by (cpu))",
+        "cpu_usage": f"100 - (avg(irate(node_cpu_seconds_total{{instance=~'.*{instance}.*', mode='idle'}}[5m])) * 100)",
+        "load_1m": f"node_load1{{instance=~'.*{instance}.*'}}",
+        "mem_total": f"node_memory_MemTotal_bytes{{instance=~'.*{instance}.*'}}",
+        "mem_avail": f"node_memory_MemAvailable_bytes{{instance=~'.*{instance}.*'}}",
+        "disk_size": f"node_filesystem_size_bytes{{instance=~'.*{instance}.*', fstype=~'ext[2-4]|xfs|btrfs'}}",
+        "disk_free": f"node_filesystem_free_bytes{{instance=~'.*{instance}.*', fstype=~'ext[2-4]|xfs|btrfs'}}",
+        "disk_read_bytes": f"rate(node_disk_read_bytes_total{{instance=~'.*{instance}.*'}}[5m])",
+        "disk_write_bytes": f"rate(node_disk_written_bytes_total{{instance=~'.*{instance}.*'}}[5m])",
+        "net_rx_bytes": f"sum(rate(node_network_receive_bytes_total{{instance=~'.*{instance}.*', device!='lo'}}[5m]))",
+        "net_tx_bytes": f"sum(rate(node_network_transmit_bytes_total{{instance=~'.*{instance}.*', device!='lo'}}[5m]))"
+    }
+    
+    async with httpx.AsyncClient(timeout=10.0) as client:
+        results = {}
+        for name, query in queries.items():
+            try:
+                res = await client.get(f"{PROMETHEUS_URL}/api/v1/query", params={"query": query})
+                if res.status_code == 200:
+                    data = res.json().get("data", {}).get("result", [])
+                    results[name] = data
+                else:
+                    results[name] = []
+            except Exception as e:
+                logger.error(f"Error querying {name}: {e}")
+                results[name] = []
+                
+        def get_value(data_list, default="N/A"):
+            if data_list and len(data_list) > 0:
+                return data_list[0]["value"][1]
+            return default
+            
+        cpu_cores = get_value(results["cpu_cores"])
+        cpu_usage = get_value(results["cpu_usage"])
+        load_1m = get_value(results["load_1m"])
+        mem_total = get_value(results["mem_total"])
+        mem_avail = get_value(results["mem_avail"])
+        net_rx = get_value(results["net_rx_bytes"])
+        net_tx = get_value(results["net_tx_bytes"])
+        
+        ram_report = "N/A"
+        if mem_total != "N/A" and mem_avail != "N/A":
+            total_gb = float(mem_total) / (1024**3)
+            avail_gb = float(mem_avail) / (1024**3)
+            used_gb = total_gb - avail_gb
+            usage_pct = (used_gb / total_gb) * 100
+            ram_report = f"{round(used_gb, 2)} GB / {round(total_gb, 2)} GB ({round(usage_pct, 2)}%)"
+            
+        disk_rows = []
+        disk_size_data = results["disk_size"]
+        disk_free_data = results["disk_free"]
+        
+        free_map = {}
+        for item in disk_free_data:
+            mount = item.get("metric", {}).get("mountpoint", "unknown")
+            free_map[mount] = float(item["value"][1])
+            
+        for item in disk_size_data:
+            metric = item.get("metric", {})
+            mount = metric.get("mountpoint", "unknown")
+            device = metric.get("device", "unknown")
+            fstype = metric.get("fstype", "unknown")
+            size = float(item["value"][1])
+            free = free_map.get(mount, 0.0)
+            used = size - free
+            used_pct = (used / size) * 100 if size > 0 else 0
+            
+            size_gb = size / (1024**3)
+            used_gb = used / (1024**3)
+            free_gb = free / (1024**3)
+            
+            disk_rows.append(
+                f"| `{device}` | `{mount}` | `{fstype}` | {round(size_gb, 2)} GB | {round(used_gb, 2)} GB | {round(free_gb, 2)} GB | {round(used_pct, 2)}% |"
+            )
+            
+        disk_report = "\n".join(disk_rows) if disk_rows else "| N/A | N/A | N/A | N/A | N/A | N/A | N/A |"
+        
+        io_rows = []
+        for item in results["disk_read_bytes"]:
+            dev = item.get("metric", {}).get("device", "unknown")
+            read_rate_kb = float(item["value"][1]) / 1024
+            write_rate_kb = 0.0
+            for w_item in results["disk_write_bytes"]:
+                if w_item.get("metric", {}).get("device") == dev:
+                    write_rate_kb = float(w_item["value"][1]) / 1024
+                    break
+            io_rows.append(f"| `{dev}` | {round(read_rate_kb, 2)} KB/s | {round(write_rate_kb, 2)} KB/s |")
+            
+        io_report = "\n".join(io_rows) if io_rows else "| N/A | N/A | N/A |"
+        
+        net_rx_kb = float(net_rx) / 1024 if net_rx != "N/A" else 0.0
+        net_tx_kb = float(net_tx) / 1024 if net_tx != "N/A" else 0.0
+        
+        report = [
+            f"## 📊 Detailed Host Report for Instance: `{instance}`\n",
+            f"### ⚡ CPU & Load Info",
+            f"- **CPU Cores**: {cpu_cores}",
+            f"- **CPU Usage (5m avg)**: {round(float(cpu_usage), 2) if cpu_usage != 'N/A' else 'N/A'}%",
+            f"- **Load Average (1m)**: {load_1m}\n",
+            f"### 🧠 Memory (RAM) Info",
+            f"- **RAM Usage**: {ram_report}\n",
+            f"### 🌐 Network Traffic",
+            f"- **Incoming (Rx Rate)**: {round(net_rx_kb, 2)} KB/s",
+            f"- **Outgoing (Tx Rate)**: {round(net_tx_kb, 2)} KB/s\n",
+            f"### 💾 Disk Space Usage",
+            f"| Device | Mountpoint | FSType | Size | Used | Free | Usage (%) |",
+            f"| :--- | :--- | :--- | :--- | :--- | :--- | :---: |",
+            disk_report,
+            f"\n### 🔄 Disk I/O Rates (5m average)",
+            f"| Device | Read Throughput | Write Throughput |",
+            f"| :--- | :--- | :--- |",
+            io_report
+        ]
+        return "\n".join(report)
+
+@mcp.tool()
+async def analyze_resource_consumers(instance: str) -> str:
+    """
+    Identify which docker containers or systemd units are the top resource consumers
+    (CPU, RAM, Disk writes) on a host, and summarize their log volume in Loki.
+    Arguments:
+      - instance: The host name or instance identifier (e.g. 'timescaledb-ha-01').
+    """
+    container_mem_q = f"topk(5, sum by (name) (container_memory_working_set_bytes{{instance=~'.*{instance}.*', name!=''}}))"
+    container_cpu_q = f"topk(5, sum by (name) (rate(container_cpu_usage_seconds_total{{instance=~'.*{instance}.*', name!=''}}[5m])) * 100)"
+    container_write_q = f"topk(5, sum by (name) (rate(container_fs_writes_bytes_total{{instance=~'.*{instance}.*', name!=''}}[5m])) + 1)"
+    
+    docker_log_volume_q = f"sum by (container) (count_over_time({{job='docker', instance=~'.*{instance}.*}}[1h]))"
+    systemd_log_volume_q = f"sum by (unit) (count_over_time({{job='systemd', instance=~'.*{instance}.*}}[1h]))"
+    
+    async with httpx.AsyncClient(timeout=12.0) as client:
+        results = {}
+        queries = {
+            "c_mem": (f"{PROMETHEUS_URL}/api/v1/query", {"query": container_mem_q}),
+            "c_cpu": (f"{PROMETHEUS_URL}/api/v1/query", {"query": container_cpu_q}),
+            "c_write": (f"{PROMETHEUS_URL}/api/v1/query", {"query": container_write_q}),
+            "docker_logs": (f"{LOKI_URL}/loki/api/v1/query", {"query": docker_log_volume_q}),
+            "systemd_logs": (f"{LOKI_URL}/loki/api/v1/query", {"query": systemd_log_volume_q})
+        }
+        
+        for name, (url, params) in queries.items():
+            try:
+                res = await client.get(url, params=params)
+                if res.status_code == 200:
+                    results[name] = res.json().get("data", {}).get("result", [])
+                else:
+                    results[name] = []
+            except Exception as e:
+                logger.error(f"Error calling {name}: {e}")
+                results[name] = []
+                
+        cpu_lines = []
+        for item in results["c_cpu"]:
+            name = item.get("metric", {}).get("name", "unknown")
+            val = round(float(item["value"][1]), 2)
+            cpu_lines.append(f"- **`{name}`**: {val}% CPU core")
+        cpu_report = "\n".join(cpu_lines) if cpu_lines else "- Không ghi nhận dữ liệu cAdvisor CPU."
+        
+        mem_lines = []
+        for item in results["c_mem"]:
+            name = item.get("metric", {}).get("name", "unknown")
+            val_mb = round(float(item["value"][1]) / (1024**2), 2)
+            mem_lines.append(f"- **`{name}`**: {val_mb} MB RAM")
+        mem_report = "\n".join(mem_lines) if mem_lines else "- Không ghi nhận dữ liệu cAdvisor Memory."
+        
+        write_lines = []
+        for item in results["c_write"]:
+            name = item.get("metric", {}).get("name", "unknown")
+            val_kb = round((float(item["value"][1]) - 1) / 1024, 2)
+            if val_kb < 0: val_kb = 0.0
+            write_lines.append(f"- **`{name}`**: {val_kb} KB/s ghi đĩa")
+        write_report = "\n".join(write_lines) if write_lines else "- Không ghi nhận dữ liệu cAdvisor Disk Write."
+        
+        d_log_lines = []
+        sorted_d_logs = sorted(results["docker_logs"], key=lambda x: float(x["value"][1]), reverse=True)[:5]
+        for item in sorted_d_logs:
+            container = item.get("metric", {}).get("container", "unknown")
+            count = int(float(item["value"][1]))
+            d_log_lines.append(f"- **`{container}`**: {count:,} dòng log/giờ")
+        docker_log_report = "\n".join(d_log_lines) if d_log_lines else "- Không ghi nhận log docker nào trong 1 giờ qua."
+        
+        sys_log_lines = []
+        sorted_sys_logs = sorted(results["systemd_logs"], key=lambda x: float(x["value"][1]), reverse=True)[:5]
+        for item in sorted_sys_logs:
+            unit = item.get("metric", {}).get("unit", "unknown")
+            count = int(float(item["value"][1]))
+            sys_log_lines.append(f"- **`{unit}`**: {count:,} dòng log/giờ")
+        systemd_log_report = "\n".join(sys_log_lines) if sys_log_lines else "- Không ghi nhận log systemd nào trong 1 giờ qua."
+        
+        report = [
+            f"## 🔍 Resource Consumer Analysis for Host: `{instance}`\n",
+            f"### ⚙️ Top 5 Containers by CPU usage",
+            cpu_report + "\n",
+            f"### 🧠 Top 5 Containers by RAM usage",
+            mem_report + "\n",
+            f"### 💾 Top 5 Containers by Disk Write Activity",
+            write_report + "\n",
+            f"### 📝 Top 5 Docker Containers by Log Volume (Last 1 hour)",
+            docker_log_report + "\n",
+            f"### ⚙️ Top 5 Systemd Services by Log Volume (Last 1 hour)",
+            systemd_log_report
+        ]
+        return "\n".join(report)
 
 @mcp.tool()
 async def explain_root_cause(service_name: str) -> str:

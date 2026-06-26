@@ -4,6 +4,7 @@
 prometheus.exporter.unix "agent_host" {
   procfs_path = "/host/proc"
   sysfs_path  = "/host/sys"
+  rootfs_path = "/host/root"
 }
 
 prometheus.relabel "agent_host" {

@@ -4,6 +4,7 @@
 prometheus.exporter.unix "local" {
   procfs_path = "/host/proc"
   sysfs_path  = "/host/sys"
+  rootfs_path = "/host/root"
 }
 
 prometheus.relabel "local_host" {

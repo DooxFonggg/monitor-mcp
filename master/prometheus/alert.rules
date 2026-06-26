@@ -88,35 +88,35 @@ groups:
           summary: "Bộ nhớ RAM tăng cao (Host: {{ $labels.instance }})"
           description: "Sử dụng RAM đã đạt {{ humanize $value }}% (Trống dưới 15%)."
 
-      # DISK SPACE CRITICAL: Phân vùng gốc (/) dung lượng trống dưới 5%
+      # DISK SPACE CRITICAL: Phân vùng dung lượng trống dưới 5%
       - alert: HostDiskSpaceCritical
-        expr: (node_filesystem_size_bytes{mountpoint="/"} - node_filesystem_free_bytes{mountpoint="/"}) / node_filesystem_size_bytes{mountpoint="/"} * 100 > 95
+        expr: (node_filesystem_size_bytes{fstype=~"ext[2-4]|xfs|btrfs"} - node_filesystem_free_bytes{fstype=~"ext[2-4]|xfs|btrfs"}) / node_filesystem_size_bytes{fstype=~"ext[2-4]|xfs|btrfs"} * 100 > 95
         for: 2m
         labels:
           severity: critical
         annotations:
-          summary: "Ổ cứng sắp đầy (Host: {{ $labels.instance }})"
-          description: "Phân vùng root (/) đã sử dụng {{ humanize $value }}% dung lượng (Trống dưới 5%). Hệ thống có thể bị khóa ghi đĩa."
+          summary: "Ổ cứng sắp đầy nghiêm trọng (Host: {{ $labels.instance }}, Mount: {{ $labels.mountpoint }})"
+          description: "Phân vùng {{ $labels.mountpoint }} đã sử dụng {{ humanize $value }}% dung lượng (Trống dưới 5%). Hệ thống có thể bị khóa ghi đĩa."
 
-      # DISK SPACE WARNING: Phân vùng gốc (/) dung lượng trống dưới 15%
+      # DISK SPACE WARNING: Phân vùng dung lượng trống dưới 15%
       - alert: HostDiskSpaceWarning
-        expr: (node_filesystem_size_bytes{mountpoint="/"} - node_filesystem_free_bytes{mountpoint="/"}) / node_filesystem_size_bytes{mountpoint="/"} * 100 > 85
+        expr: (node_filesystem_size_bytes{fstype=~"ext[2-4]|xfs|btrfs"} - node_filesystem_free_bytes{fstype=~"ext[2-4]|xfs|btrfs"}) / node_filesystem_size_bytes{fstype=~"ext[2-4]|xfs|btrfs"} * 100 > 85
         for: 5m
         labels:
           severity: warning
         annotations:
-          summary: "Ổ cứng sắp đầy (Host: {{ $labels.instance }})"
-          description: "Phân vùng root (/) đã sử dụng {{ humanize $value }}% dung lượng (Trống dưới 15%)."
+          summary: "Ổ cứng sắp đầy (Host: {{ $labels.instance }}, Mount: {{ $labels.mountpoint }})"
+          description: "Phân vùng {{ $labels.mountpoint }} đã sử dụng {{ humanize $value }}% dung lượng (Trống dưới 15%)."
 
-      # DISK PREDICTIVE WARNING: Dự báo ổ cứng sẽ đầy trong vòng 24 giờ tới dựa trên tốc độ ghi hiện tại
+      # DISK PREDICTIVE WARNING: Dự báo phân vùng sẽ đầy trong vòng 24 giờ tới dựa trên tốc độ ghi hiện tại
       - alert: HostDiskFillingUpIn24Hours
-        expr: predict_linear(node_filesystem_free_bytes{mountpoint="/"}[1h], 86400) < 0
+        expr: predict_linear(node_filesystem_free_bytes{fstype=~"ext[2-4]|xfs|btrfs"}[1h], 86400) < 0
         for: 10m
         labels:
           severity: warning
         annotations:
-          summary: "Cảnh báo sớm: Ổ cứng sẽ đầy trong 24 giờ tới (Host: {{ $labels.instance }})"
-          description: "Dựa trên xu hướng ghi đĩa trong 1 giờ qua, ổ đĩa sẽ hết dung lượng trống trong vòng 24 giờ tới."
+          summary: "Cảnh báo sớm: Phân vùng sẽ đầy trong 24h (Host: {{ $labels.instance }}, Mount: {{ $labels.mountpoint }})"
+          description: "Dựa trên xu hướng ghi đĩa trong 1 giờ qua, phân vùng {{ $labels.mountpoint }} sẽ hết dung lượng trống trong vòng 24 giờ tới."
 
       # NETWORK WARNING: Có lỗi xảy ra trên luồng nhận hoặc gửi gói tin mạng
       - alert: HostNetworkErrors

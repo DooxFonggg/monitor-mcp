@@ -124,6 +124,7 @@ services:
       - /run/log/journal:/run/log/journal:ro
       - /proc:/host/proc:ro
       - /sys:/host/sys:ro
+      - /:/host/root:ro,rslave
     environment:
       - AGENT_NAME=${AGENT_NAME:-master-node}
       - HOST_IP=${HOST_IP:-127.0.0.1}

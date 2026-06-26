@@ -43,7 +43,7 @@ services:
       - /run/log/journal:/run/log/journal:ro
       - /proc:/host/proc:ro
       - /sys:/host/sys:ro
-      #- /:/host/root:ro
+      - /:/host/root:ro,rslave
     environment:
       - PROMETHEUS_URL=${PROMETHEUS_URL:-http://localhost:9090/api/v1/write}
       - LOKI_URL=${LOKI_URL:-http://localhost:3100/loki/api/v1/push}
