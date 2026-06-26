@@ -36,7 +36,7 @@ fi
 
 # 2. Add Grafana Repository and GPG key
 echo -e "${GREEN}[1/5] Thêm kho lưu trữ Grafana APT và GPG Key...${NC}"
-apt-get update -y && apt-get install -y wget gpg software-properties-common apt-transport-https
+apt-get update -y && apt-get install -y wget gpg apt-transport-https
 
 mkdir -p /etc/apt/keyrings
 if [ ! -f /etc/apt/keyrings/grafana.gpg ]; then

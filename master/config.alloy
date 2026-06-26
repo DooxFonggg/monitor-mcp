@@ -178,3 +178,64 @@ loki.write "local_loki" {
     url = "http://loki:3100/loki/api/v1/push"
   }
 }
+
+// ==============================================================================
+// 6. PFSENSE FIREWALL INTEGRATION
+// ==============================================================================
+
+// Scrape pfSense metrics from its Node Exporter (port 9100)
+prometheus.scrape "pfsense" {
+  targets = [
+    {"__address__" = env("PFSENSE_IP") + ":9100"},
+  ]
+  forward_to      = [prometheus.relabel.pfsense.receiver]
+  scrape_interval = "15s"
+}
+
+prometheus.relabel "pfsense" {
+  forward_to = [prometheus.remote_write.local_prometheus.receiver]
+
+  rule {
+    target_label = "job"
+    replacement  = "pfsense"
+  }
+
+  rule {
+    target_label = "instance"
+    replacement  = "pfsense"
+  }
+
+  rule {
+    target_label = "host_ip"
+    replacement  = env("PFSENSE_IP")
+  }
+}
+
+// Receive pfSense Remote Syslog (UDP - Port 1514)
+loki.source.syslog "pfsense_syslog_udp" {
+  listener {
+    address  = "0.0.0.0:1514"
+    protocol = "udp"
+    labels   = {
+      job      = "pfsense-syslog",
+      instance = "pfsense",
+      host_ip  = env("PFSENSE_IP"),
+    }
+  }
+  forward_to = [loki.write.local_loki.receiver]
+}
+
+// Receive pfSense Remote Syslog (TCP - Port 1514)
+loki.source.syslog "pfsense_syslog_tcp" {
+  listener {
+    address  = "0.0.0.0:1514"
+    protocol = "tcp"
+    labels   = {
+      job      = "pfsense-syslog",
+      instance = "pfsense",
+      host_ip  = env("PFSENSE_IP"),
+    }
+  }
+  forward_to = [loki.write.local_loki.receiver]
+}
+

@@ -135,6 +135,9 @@ services:
       - run
       - --server.http.listen-addr=0.0.0.0:12345
       - /etc/alloy/config.alloy
+    ports:
+      - "1514:1514/udp"
+      - "1514:1514/tcp"
     restart: always
     networks:
       - monitor-net
