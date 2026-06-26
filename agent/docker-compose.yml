@@ -44,6 +44,7 @@ services:
       - /proc:/host/proc:ro
       - /sys:/host/sys:ro
       - /:/host/root:ro,rslave
+      - /var/run/dbus/system_bus_socket:/var/run/dbus/system_bus_socket:ro
     environment:
       - PROMETHEUS_URL=${PROMETHEUS_URL:-http://localhost:9090/api/v1/write}
       - LOKI_URL=${LOKI_URL:-http://localhost:3100/loki/api/v1/push}

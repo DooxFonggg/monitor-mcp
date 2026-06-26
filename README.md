@@ -218,56 +218,13 @@ Antigravity IDE hỗ trợ kết nối trực tiếp đến các MCP server qua 
 
 ## 🔔 Hướng Dẫn Tự Cấu Hình & Tùy Biến Cảnh Báo (Alerting Customization Guide)
 
-Phần này hướng dẫn chi tiết cách cấu hình thu thập metric của **systemd** và cách tự viết, tùy biến các luật cảnh báo (alert rules) trong Prometheus cho: **systemd, CPU, RAM, Disk, và Docker Container**, đồng thời giải thích cách giữ lại nhãn `host_ip` để gửi cảnh báo chính xác.
+Hệ thống đã được tích hợp và cấu hình sẵn việc thu thập dữ liệu dịch vụ **systemd** từ các máy chủ (đã cấu hình mount dbus socket trong file `docker-compose.yml` và kích hoạt collector systemd trong cấu hình `config.alloy`). 
 
-### 1. Kích hoạt giám sát Systemd trên Grafana Alloy (Docker Container)
-
-Do Grafana Alloy chạy trong Docker Container, để thu thập trạng thái các dịch vụ `systemd` của Host vật lý, bạn cần thực hiện 2 bước sau:
-
-#### Bước 1.1: Mount D-Bus Socket của Host vào container Alloy
-Mở file `docker-compose.yml` (ở cả máy Master và Agent) và bổ sung volume mount cho **D-Bus system bus socket** của host để Alloy có quyền truy vấn các dịch vụ hệ thống:
-
-```yaml
-  alloy:
-    image: grafana/alloy:v1.1.1
-    # ... các cấu hình khác ...
-    volumes:
-      - ./config.alloy:/etc/alloy/config.alloy:ro
-      - /var/run/docker.sock:/var/run/docker.sock:ro
-      - /var/log:/var/log:ro
-      - /run/log/journal:/run/log/journal:ro
-      - /proc:/host/proc:ro
-      - /sys:/host/sys:ro
-      - /:/host/root:ro,rslave
-      # BỔ SUNG DÒNG DƯỚI ĐÂY để thu thập trạng thái dịch vụ systemd từ host:
-      - /var/run/dbus/system_bus_socket:/var/run/dbus/system_bus_socket:ro
-```
-
-#### Bước 1.2: Cấu hình component `prometheus.exporter.unix` trong `config.alloy`
-Cập nhật block `prometheus.exporter.unix` trong `config.alloy` (ở máy chủ mà bạn muốn giám sát systemd) để bật collector `systemd` và lọc các service cần giám sát bằng biểu thức chính quy (regex) để tránh gây tràn metric:
-
-```alloy
-prometheus.exporter.unix "local" {
-  procfs_path = "/host/proc"
-  sysfs_path  = "/host/sys"
-  rootfs_path = "/host/root"
-
-  // Bật các collector mặc định kèm theo 'systemd'
-  set_collectors = ["cpu", "diskstats", "filesystem", "loadavg", "meminfo", "netdev", "os", "stat", "uname", "systemd"]
-
-  // Cấu hình cụ thể cho systemd
-  systemd {
-    // Chỉ định các service cụ thể cần giám sát bằng regex (ví dụ: alloy, docker, nginx, ssh)
-    unit_include = "alloy\\.service|docker\\.service|nginx\\.service|ssh\\.service" 
-    enable_restarts = true
-    start_time      = true
-  }
-}
-```
+Bạn chỉ việc thực hiện bước viết/tùy chỉnh các luật cảnh báo dưới đây:
 
 ---
 
-### 2. Cách Viết Các Luật Cảnh Báo Custom (Prometheus Alert Rules)
+### Cách Viết Các Luật Cảnh Báo Custom (Prometheus Alert Rules)
 
 Các cảnh báo được định nghĩa tại file `master/prometheus/alert.rules`. Mỗi luật cảnh báo có cấu trúc cơ bản như sau:
 
@@ -282,7 +239,7 @@ Các cảnh báo được định nghĩa tại file `master/prometheus/alert.rul
     description: "Mô tả chi tiết lỗi (sử dụng biến label)"
 ```
 
-#### 2.1 Cảnh báo dịch vụ Systemd
+#### 1 Cảnh báo dịch vụ Systemd
 Để cảnh báo khi một dịch vụ trong systemd bị sập (trạng thái không phải là `active`):
 * **Metric sử dụng**: `node_systemd_unit_state{state="active"} == 0` (Giá trị `1` là đang chạy tốt, `0` là bị dừng).
 * **Rule mẫu**:
@@ -298,7 +255,7 @@ Các cảnh báo được định nghĩa tại file `master/prometheus/alert.rul
           description: "Dịch vụ Systemd '{{ $labels.name }}' trên máy chủ {{ $labels.instance }} (IP: {{ $labels.host_ip }}) đã bị sập trong hơn 1 phút."
 ```
 
-#### 2.2 Cảnh báo RAM (Memory)
+#### 2 Cảnh báo RAM (Memory)
 * **Metric sử dụng**: `node_memory_MemTotal_bytes` và `node_memory_MemAvailable_bytes`.
 * **Rule mẫu**:
 ```yaml
@@ -313,7 +270,7 @@ Các cảnh báo được định nghĩa tại file `master/prometheus/alert.rul
           description: "Sử dụng RAM trên máy chủ {{ $labels.instance }} (IP: {{ $labels.host_ip }}) đạt {{ humanize $value }}% (Vượt ngưỡng 85% liên tục trong 3 phút)."
 ```
 
-#### 2.3 Cảnh báo CPU
+#### 3 Cảnh báo CPU
 * **Metric sử dụng**: `node_cpu_seconds_total`.
 * **Lưu ý quan trọng về gom nhóm**: CPU cần tính trung bình bằng hàm `avg`. Để tránh mất nhãn `host_ip`, bạn phải gom nhóm theo cả `instance` và `host_ip` bằng mệnh đề `by(instance, host_ip)`. Nếu chỉ dùng `by(instance)`, Prometheus sẽ bỏ qua nhãn `host_ip` và cảnh báo sẽ không hiển thị được IP thiết bị!
 * **Rule mẫu**:
@@ -329,7 +286,7 @@ Các cảnh báo được định nghĩa tại file `master/prometheus/alert.rul
           description: "Sử dụng CPU trên máy chủ {{ $labels.instance }} (IP: {{ $labels.host_ip }}) đạt {{ humanize $value }}% (Vượt ngưỡng 80% liên tục trong 5 phút)."
 ```
 
-#### 2.4 Cảnh báo Ổ đĩa (Disk Space)
+#### 4 Cảnh báo Ổ đĩa (Disk Space)
 * **Metric sử dụng**: `node_filesystem_free_bytes` và `node_filesystem_size_bytes`.
 * **Rule mẫu**:
 ```yaml
@@ -344,7 +301,7 @@ Các cảnh báo được định nghĩa tại file `master/prometheus/alert.rul
           description: "Phân vùng {{ $labels.mountpoint }} trên máy chủ {{ $labels.instance }} (IP: {{ $labels.host_ip }}) đã sử dụng {{ humanize $value }}% dung lượng (Trống dưới 5%)."
 ```
 
-#### 2.5 Cảnh báo Docker Container
+#### 5 Cảnh báo Docker Container
 * **Metric sử dụng**: `container_memory_working_set_bytes` và `container_spec_memory_limit_bytes` (từ cAdvisor).
 * **Tránh mất nhãn IP khi giám sát Container Down**:
   Nếu bạn dùng hàm `absent(container_memory_usage_bytes{name="tên-container"})`, Prometheus sẽ tạo ra một metric rỗng và **bỏ toàn bộ nhãn** (như `instance` và `host_ip`), dẫn đến cảnh báo hiển thị trống thông tin thiết bị.
@@ -364,7 +321,7 @@ Các cảnh báo được định nghĩa tại file `master/prometheus/alert.rul
 
 ---
 
-### 3. Áp dụng (Apply) Cấu Hình Mới
+### Áp dụng (Apply) Cấu Hình Mới
 
 Sau khi chỉnh sửa xong các file cấu hình, chạy các lệnh sau để áp dụng:
 

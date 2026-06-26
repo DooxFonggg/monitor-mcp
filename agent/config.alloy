@@ -5,6 +5,16 @@ prometheus.exporter.unix "agent_host" {
   procfs_path = "/host/proc"
   sysfs_path  = "/host/sys"
   rootfs_path = "/host/root"
+
+  // Enable default collectors and systemd collector
+  set_collectors = ["cpu", "diskstats", "filesystem", "loadavg", "meminfo", "netdev", "os", "stat", "uname", "systemd"]
+
+  systemd {
+    // Only monitor important services (alloy, docker, nginx, ssh) to avoid metric explosion
+    unit_include = "alloy\\.service|docker\\.service|nginx\\.service|ssh\\.service"
+    enable_restarts = true
+    start_time      = true
+  }
 }
 
 prometheus.relabel "agent_host" {
