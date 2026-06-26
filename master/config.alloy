@@ -10,8 +10,7 @@ prometheus.exporter.unix "local" {
   set_collectors = ["cpu", "diskstats", "filesystem", "loadavg", "meminfo", "netdev", "os", "stat", "uname", "systemd"]
 
   systemd {
-    // Only monitor important services (alloy, docker, nginx, ssh) to avoid metric explosion
-    unit_include = "alloy\\.service|docker\\.service|nginx\\.service|ssh\\.service"
+    // Monitor all systemd units (defaults to unit_include = ".+")
     enable_restarts = true
     start_time      = true
   }
