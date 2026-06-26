@@ -73,9 +73,15 @@ grafana-prometeus-loki-alloy/
 │   │   └── config.yml              # Cấu hình định tuyến cảnh báo (Slack, Telegram)
 │   └── mcp-bridge/                 # MCP Server trung gian kết nối AI với Prometheus/Loki
 │
-└── agent/                          # Cấu hình cài đặt tại các máy Agent (Client Nodes)
-    ├── docker-compose.yml          # Khởi động cAdvisor & Grafana Alloy Agent
-    └── config.alloy                # Chỉ định thu thập và đẩy dữ liệu về IP của Master
+└── agent/                          # Cấu hình cài đặt tại các máy Agent dùng Docker
+│   ├── docker-compose.yml          # Khởi động cAdvisor & Grafana Alloy Agent
+│   └── config.alloy                # Chỉ định thu thập và đẩy dữ liệu về IP của Master
+│
+└── agent-no-docker/                # Cấu hình cài đặt trực tiếp không dùng Docker (Native systemd)
+    ├── install.sh                  # Script cài đặt tự động cho Proxmox VE (Debian)
+    ├── config.alloy                # Cấu hình Alloy giám sát Proxmox VE & Syslog pfSense
+    ├── .env.example                # Khai báo IP master, IP proxmox, và IP pfsense
+    └── README.md                   # Hướng dẫn chi tiết setup Proxmox & pfSense
 ```
 
 ---

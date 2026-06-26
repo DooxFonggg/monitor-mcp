@@ -1,0 +1,146 @@
+// GRAFANA ALLOY CONFIGURATION FOR NATIVE AGENT (NO-DOCKER)
+// Optimised for Proxmox VE (Debian) host and pfSense firewall integration
+
+// ==============================================================================
+// 1. PROXMOX VE METRICS (Host Exporter)
+// ==============================================================================
+prometheus.exporter.unix "proxmox" {
+  // Since it runs natively on the host, we use standard host paths
+  set_collectors = ["cpu", "diskstats", "filesystem", "loadavg", "meminfo", "netdev", "os", "stat", "uname", "systemd"]
+
+  systemd {
+    // Monitor all systemd services on Proxmox (defaults to unit_include = ".+")
+    enable_restarts = true
+    start_time      = true
+  }
+}
+
+prometheus.relabel "proxmox" {
+  forward_to = [prometheus.remote_write.prometheus_master.receiver]
+
+  rule {
+    target_label = "job"
+    replacement  = "nodeexporter"
+  }
+
+  rule {
+    target_label = "instance"
+    replacement  = env("AGENT_NAME")
+  }
+
+  rule {
+    target_label = "host_ip"
+    replacement  = env("HOST_IP")
+  }
+}
+
+prometheus.scrape "proxmox" {
+  targets         = prometheus.exporter.unix.proxmox.targets
+  forward_to      = [prometheus.relabel.proxmox.receiver]
+  scrape_interval = "15s"
+}
+
+// ==============================================================================
+// 2. PFSENSE FIREWALL METRICS SCRAPER
+// ==============================================================================
+prometheus.scrape "pfsense" {
+  targets = [
+    {"__address__" = env("PFSENSE_IP") + ":9100"},
+  ]
+  forward_to      = [prometheus.relabel.pfsense.receiver]
+  scrape_interval = "15s"
+}
+
+prometheus.relabel "pfsense" {
+  forward_to = [prometheus.remote_write.prometheus_master.receiver]
+
+  rule {
+    target_label = "job"
+    replacement  = "pfsense"
+  }
+
+  rule {
+    target_label = "instance"
+    replacement  = "pfsense"
+  }
+
+  rule {
+    target_label = "host_ip"
+    replacement  = env("PFSENSE_IP")
+  }
+}
+
+// ==============================================================================
+// 3. PROXMOX VE SYSTEMD JOURNAL LOGS
+// ==============================================================================
+loki.source.journal "proxmox_journal" {
+  forward_to = [loki.relabel.proxmox_journal.receiver]
+}
+
+loki.relabel "proxmox_journal" {
+  forward_to = [loki.write.loki_master.receiver]
+
+  rule {
+    target_label = "job"
+    replacement  = "systemd"
+  }
+
+  rule {
+    target_label = "instance"
+    replacement  = env("AGENT_NAME")
+  }
+
+  rule {
+    target_label = "host_ip"
+    replacement  = env("HOST_IP")
+  }
+
+  rule {
+    source_labels = ["__journal__systemd_unit"]
+    target_label  = "unit"
+  }
+}
+
+// ==============================================================================
+// 4. PFSENSE SYSLOG LOG RECEIVER (UDP & TCP - Port 1514)
+// ==============================================================================
+loki.source.syslog "pfsense_syslog_udp" {
+  listener {
+    address  = "0.0.0.0:1514"
+    protocol = "udp"
+    labels   = {
+      job      = "pfsense-syslog",
+      instance = "pfsense",
+      host_ip  = env("PFSENSE_IP"),
+    }
+  }
+  forward_to = [loki.write.loki_master.receiver]
+}
+
+loki.source.syslog "pfsense_syslog_tcp" {
+  listener {
+    address  = "0.0.0.0:1514"
+    protocol = "tcp"
+    labels   = {
+      job      = "pfsense-syslog",
+      instance = "pfsense",
+      host_ip  = env("PFSENSE_IP"),
+    }
+  }
+  forward_to = [loki.write.loki_master.receiver]
+}
+
+// ==============================================================================
+// 5. OUTPUTS TO CENTRAL MASTER NODE
+// ==============================================================================
+prometheus.remote_write "prometheus_master" {
+  endpoint {
+    url = env("PROMETHEUS_URL")
+  }
+}
+
+loki.write "loki_master" {
+  endpoint {
+    url = env("LOKI_URL")
+  }
+}
