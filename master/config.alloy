@@ -214,9 +214,10 @@ prometheus.relabel "pfsense" {
 // Receive pfSense Remote Syslog (UDP - Port 1514)
 loki.source.syslog "pfsense_syslog_udp" {
   listener {
-    address  = "0.0.0.0:1514"
-    protocol = "udp"
-    labels   = {
+    address       = "0.0.0.0:1514"
+    protocol      = "udp"
+    syslog_format = "rfc3164"
+    labels        = {
       job      = "pfsense-syslog",
       instance = "pfsense",
       host_ip  = env("PFSENSE_IP"),
@@ -228,9 +229,10 @@ loki.source.syslog "pfsense_syslog_udp" {
 // Receive pfSense Remote Syslog (TCP - Port 1514)
 loki.source.syslog "pfsense_syslog_tcp" {
   listener {
-    address  = "0.0.0.0:1514"
-    protocol = "tcp"
-    labels   = {
+    address       = "0.0.0.0:1514"
+    protocol      = "tcp"
+    syslog_format = "rfc3164"
+    labels        = {
       job      = "pfsense-syslog",
       instance = "pfsense",
       host_ip  = env("PFSENSE_IP"),

@@ -130,6 +130,7 @@ services:
     environment:
       - AGENT_NAME=${AGENT_NAME:-master-node}
       - HOST_IP=${HOST_IP:-127.0.0.1}
+      - PFSENSE_IP=${PFSENSE_IP}
       - TZ=Asia/Ho_Chi_Minh
     command:
       - run
