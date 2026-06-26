@@ -197,7 +197,7 @@ prometheus.relabel "pfsense" {
 
   rule {
     target_label = "job"
-    replacement  = "pfsense"
+    replacement  = "nodeexporter"
   }
 
   rule {
